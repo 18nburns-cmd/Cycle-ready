@@ -15,11 +15,10 @@ coaching work can rely on stable athlete data and domain boundaries.
 - [x] Validate the first authenticated phone upload without exposing one
       athlete's cloud snapshot to another account.
 
-- [ ] Deploy the configured release dashboard to a stable HTTPS address and
-      validate its first authenticated web read.
-      GitHub Pages deployment automation is configured; repository variables,
-      Pages enablement and the first authenticated browser read require the
-      repository owner's GitHub/Supabase configuration.
+- [x] Deploy the configured release dashboard to a stable HTTPS address and
+      validate its first authenticated web read. GitHub Pages release 9 was
+      verified with the athlete's account and synced headline metrics on
+      25 August 2026.
 
 - [ ] Add chunked cloud storage for second-by-second activity samples so web
       ride charts can load detailed power, heart-rate and cadence traces.

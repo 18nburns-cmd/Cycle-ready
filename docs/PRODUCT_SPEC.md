@@ -34,6 +34,12 @@ or training-history data must reduce confidence rather than being invented.
 
 Every recommendation must improve long-term performance.
 
+The authenticated web dashboard is available through GitHub Pages and reads
+the same per-athlete Supabase snapshot as Android. Its first production read
+was validated with ride totals, distance, duration, load, FTP, weight and HRV.
+Detailed second-by-second ride traces remain a separate cloud-storage
+milestone so large sample streams do not destabilise headline snapshot sync.
+
 ---
 
 # Mission
