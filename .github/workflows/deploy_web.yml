@@ -33,7 +33,7 @@ jobs:
       - name: Validate cloud configuration
         env:
           SUPABASE_URL: ${{ vars.CYCLEREADY_SUPABASE_URL }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.CYCLEREADY_SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ vars.CYCLEREADY_SUPABASE_PUBLISHABLE_KEY }}
         run: |
           if [ -z "$SUPABASE_URL" ]; then
             echo "Missing repository variable: CYCLEREADY_SUPABASE_URL"
@@ -50,7 +50,7 @@ jobs:
           --target lib/main_web.dart
           --base-href /Cycle-ready/
           --dart-define=CYCLEREADY_SUPABASE_URL=${{ vars.CYCLEREADY_SUPABASE_URL }}
-          --dart-define=CYCLEREADY_SUPABASE_PUBLISHABLE_KEY=${{ secrets.CYCLEREADY_SUPABASE_PUBLISHABLE_KEY }}
+          --dart-define=CYCLEREADY_SUPABASE_PUBLISHABLE_KEY=${{ vars.CYCLEREADY_SUPABASE_PUBLISHABLE_KEY }}
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5

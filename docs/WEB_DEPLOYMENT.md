@@ -9,11 +9,12 @@ entry point and publishes `build/web` to GitHub Pages.
 In GitHub, open **Settings > Secrets and variables > Actions** and configure:
 
 - Repository variable `CYCLEREADY_SUPABASE_URL`
-- Repository secret `CYCLEREADY_SUPABASE_PUBLISHABLE_KEY`
+- Repository variable `CYCLEREADY_SUPABASE_PUBLISHABLE_KEY`
 
-The publishable Supabase key is intended for client applications, but storing
-it as an Actions secret avoids duplicating environment configuration in source
-control. Row-level security remains the actual data-access boundary.
+The publishable Supabase key is intended for client applications and is
+necessarily embedded in the compiled browser bundle. Row-level security and
+authenticated per-user policies remain the actual data-access boundary. Never
+use a Supabase secret or service-role key here.
 
 Under **Settings > Pages**, set **Source** to **GitHub Actions**. A push to
 `main`, or a manual run from the Actions page, then deploys the dashboard to:
