@@ -7,6 +7,7 @@ android/.gradle/
 android/local.properties
 lib/**/*.g.dart
 config/cloud_defines.json
+config/cloud_defines.ci.json
 .codex-gitconfig
 .idea/
 *.iml

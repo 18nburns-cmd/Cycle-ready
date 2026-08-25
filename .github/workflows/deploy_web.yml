@@ -45,12 +45,21 @@ jobs:
           fi
 
       - name: Build web dashboard
-        run: >-
-          flutter build web --release
-          --target lib/main_web.dart
-          --base-href /Cycle-ready/
-          --dart-define=CYCLEREADY_SUPABASE_URL=${{ vars.CYCLEREADY_SUPABASE_URL }}
-          --dart-define=CYCLEREADY_SUPABASE_PUBLISHABLE_KEY=${{ vars.CYCLEREADY_SUPABASE_PUBLISHABLE_KEY }}
+        env:
+          SUPABASE_URL: ${{ vars.CYCLEREADY_SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ vars.CYCLEREADY_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          mkdir -p config
+          printf '{"CYCLEREADY_SUPABASE_URL":"%s","CYCLEREADY_SUPABASE_PUBLISHABLE_KEY":"%s"}' \
+            "$SUPABASE_URL" "$SUPABASE_PUBLISHABLE_KEY" > config/cloud_defines.ci.json
+          flutter build web --release \
+            --target lib/main_web.dart \
+            --base-href /Cycle-ready/ \
+            --dart-define-from-file=config/cloud_defines.ci.json
+          if ! grep -Fq "$SUPABASE_URL" build/web/main.dart.js; then
+            echo "Compiled web bundle does not contain the configured Supabase URL"
+            exit 1
+          fi
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
