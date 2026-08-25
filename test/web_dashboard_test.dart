@@ -20,10 +20,7 @@ void main() {
 
     await tester.tap(find.text('Performance').first);
     await tester.pumpAndSettle();
-    expect(
-        find.text('Fitness, fatigue, form, power curve and ride analysis '
-            'will appear here once cloud sync is connected.'),
-        findsOneWidget);
+    expect(find.text('Sign in to view your CycleReady data.'), findsOneWidget);
   });
 
   testWidgets('compact web dashboard uses bottom navigation', (tester) async {

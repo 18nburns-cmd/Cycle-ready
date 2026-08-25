@@ -4,6 +4,7 @@ import 'package:cycle_ready/src/features/cloud_sync/data/cloud_config.dart';
 import 'package:cycle_ready/src/features/cloud_sync/presentation/cloud_account_button.dart';
 import 'package:cycle_ready/src/features/cloud_sync/application/cloud_snapshot_provider.dart';
 import 'package:cycle_ready/src/features/cloud_sync/domain/web_dashboard_summary.dart';
+import 'package:cycle_ready/src/features/cloud_sync/domain/web_portal_data.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 Future<void> main() async {
@@ -66,30 +67,10 @@ class _WebDashboardShellState extends State<WebDashboardShell> {
 
   static const pages = <Widget>[
     _WebOverview(),
-    _EmptyFeature(
-      icon: Icons.show_chart,
-      title: 'Performance',
-      description:
-          'Fitness, fatigue, form, power curve and ride analysis will appear here once cloud sync is connected.',
-    ),
-    _EmptyFeature(
-      icon: Icons.calendar_month,
-      title: 'Training calendar',
-      description:
-          'Planned and completed rides, strength sessions and mobility work will share one calendar.',
-    ),
-    _EmptyFeature(
-      icon: Icons.favorite,
-      title: 'Wellness',
-      description:
-          'Sleep, HRV, resting heart rate, recovery and body-composition trends will be available across longer periods.',
-    ),
-    _EmptyFeature(
-      icon: Icons.restaurant,
-      title: 'Nutrition',
-      description:
-          'Daily calories, macros, hydration and saved foods will stay aligned with the phone app.',
-    ),
+    _PerformancePage(),
+    _CalendarPage(),
+    _WellnessPage(),
+    _NutritionPage(),
   ];
 
   @override
@@ -204,7 +185,7 @@ class _WebOverview extends ConsumerWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'The responsive dashboard is ready. Secure cloud sync is the next milestone before personal health and training data can appear here.',
+                  'A live view of your latest training, recovery and body metrics from CycleReady.',
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
                 const SizedBox(height: 24),
@@ -215,6 +196,8 @@ class _WebOverview extends ConsumerWidget {
                           ? const _CloudFoundationCard()
                           : _SyncedMetrics(summary: summary),
                     ),
+                const SizedBox(height: 18),
+                const _TodayDetails(),
                 const SizedBox(height: 24),
                 LayoutBuilder(
                   builder: (context, constraints) {
@@ -300,6 +283,68 @@ class _SyncedMetrics extends StatelessWidget {
 
   String _optional(Object? value, String suffix) =>
       value == null ? 'Not available' : '$value$suffix';
+}
+
+class _TodayDetails extends ConsumerWidget {
+  const _TodayDetails();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => ref
+      .watch(webPortalDataProvider)
+      .when(
+        loading: () => const SizedBox.shrink(),
+        error: (error, stack) => const SizedBox.shrink(),
+        data: (data) {
+          if (data == null) return const SizedBox.shrink();
+          final latest = data.recovery.isEmpty ? null : data.recovery.first;
+          final week = data.activitiesSince(const Duration(days: 7));
+          final todayNutrition = data.nutritionFor(DateTime.now());
+          final upcoming = data.planned
+              .where((session) => !session.day.isBefore(DateTime.now()))
+              .toList();
+          return Column(
+            children: [
+              _MetricWrap(metrics: [
+                (
+                  'Latest sleep',
+                  latest?.sleepMinutes == null
+                      ? '—'
+                      : '${(latest!.sleepMinutes! / 60).toStringAsFixed(1)} h'
+                ),
+                (
+                  'Resting HR',
+                  latest?.restingHeartRate == null
+                      ? '—'
+                      : '${latest!.restingHeartRate!.toStringAsFixed(0)} bpm'
+                ),
+                (
+                  '7-day load',
+                  week
+                      .fold<double>(0, (sum, ride) => sum + ride.trainingLoad)
+                      .toStringAsFixed(0)
+                ),
+                ('Today’s calories', '${todayNutrition.calories} kcal'),
+                ('Today’s water', '${todayNutrition.waterMillilitres} ml'),
+              ]),
+              if (upcoming.isNotEmpty) ...[
+                const SizedBox(height: 18),
+                _SectionCard(
+                  title: 'Next planned session',
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading:
+                        const CircleAvatar(child: Icon(Icons.directions_bike)),
+                    title: Text(upcoming.first.title,
+                        style: const TextStyle(fontWeight: FontWeight.w800)),
+                    subtitle: Text(
+                        '${_longDate(upcoming.first.day)} • ${upcoming.first.durationMinutes} min • ${upcoming.first.targetLoad} load'),
+                  ),
+                ),
+              ],
+            ],
+          );
+        },
+      );
 }
 
 class _MetricChip extends StatelessWidget {
@@ -417,35 +462,477 @@ class _PreviewCard extends StatelessWidget {
       );
 }
 
-class _EmptyFeature extends StatelessWidget {
-  const _EmptyFeature({
-    required this.icon,
-    required this.title,
-    required this.description,
-  });
-
-  final IconData icon;
-  final String title;
-  final String description;
+class _PerformancePage extends ConsumerWidget {
+  const _PerformancePage();
 
   @override
-  Widget build(BuildContext context) => Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 560),
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon,
-                    size: 56, color: Theme.of(context).colorScheme.primary),
-                const SizedBox(height: 20),
-                Text(title, style: Theme.of(context).textTheme.headlineSmall),
-                const SizedBox(height: 10),
-                Text(description, textAlign: TextAlign.center),
+  Widget build(BuildContext context, WidgetRef ref) => _PortalPage(
+        data: ref.watch(webPortalDataProvider),
+        builder: (data) {
+          final week = data.activitiesSince(const Duration(days: 7));
+          final month = data.activitiesSince(const Duration(days: 28));
+          final weekLoad =
+              week.fold<double>(0, (sum, ride) => sum + ride.trainingLoad);
+          final monthLoad =
+              month.fold<double>(0, (sum, ride) => sum + ride.trainingLoad);
+          final recent = data.activities.take(10).toList();
+          return _WebPageBody(
+            title: 'Training performance',
+            subtitle:
+                'Current fitness signals and the rides that created them.',
+            children: [
+              _MetricWrap(metrics: [
+                ('FTP', _value(data.ftp, ' W')),
+                (
+                  'Power / weight',
+                  data.powerToWeight == null
+                      ? '—'
+                      : '${data.powerToWeight!.toStringAsFixed(2)} W/kg'
+                ),
+                ('7-day load', weekLoad.toStringAsFixed(0)),
+                ('28-day load', monthLoad.toStringAsFixed(0)),
+                ('7-day rides', '${week.length}'),
+                (
+                  '28-day hours',
+                  '${(month.fold<int>(0, (sum, ride) => sum + ride.durationSeconds) / 3600).toStringAsFixed(1)} h'
+                ),
+              ]),
+              _SectionCard(
+                title: 'Training load — last rides',
+                child: _BarTrend(
+                  values:
+                      recent.reversed.map((ride) => ride.trainingLoad).toList(),
+                  colour: Colors.purpleAccent,
+                ),
+              ),
+              _SectionCard(
+                title: 'Recent activities',
+                child: _ActivityTable(activities: recent),
+              ),
+              if (data.ftpHistory.isNotEmpty)
+                _SectionCard(
+                  title: 'FTP history',
+                  child: Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: data.ftpHistory
+                        .take(8)
+                        .map((estimate) => Chip(
+                              label: Text(
+                                  '${_shortDate(estimate.estimatedAt)}  •  ${estimate.watts} W  •  ${estimate.confidence}'),
+                            ))
+                        .toList(),
+                  ),
+                ),
+            ],
+          );
+        },
+      );
+}
+
+class _CalendarPage extends ConsumerWidget {
+  const _CalendarPage();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => _PortalPage(
+        data: ref.watch(webPortalDataProvider),
+        builder: (data) {
+          final now = DateTime.now();
+          final windowStart = now.subtract(const Duration(days: 14));
+          final windowEnd = now.add(const Duration(days: 42));
+          final entries = <_CalendarEntry>[
+            ...data.activities
+                .where((item) =>
+                    item.startedAt.isAfter(windowStart) &&
+                    item.startedAt.isBefore(windowEnd))
+                .map((item) => _CalendarEntry(
+                    item.startedAt,
+                    item.title,
+                    '${(item.durationSeconds / 60).round()} min • ${item.trainingLoad.toStringAsFixed(0)} load',
+                    true)),
+            ...data.planned
+                .where((item) =>
+                    item.day.isAfter(windowStart) &&
+                    item.day.isBefore(windowEnd))
+                .map((item) => _CalendarEntry(
+                    item.day,
+                    item.title,
+                    '${item.durationMinutes} min • ${item.targetLoad} target load',
+                    false)),
+          ]..sort((a, b) => a.day.compareTo(b.day));
+          return _WebPageBody(
+            title: 'Training calendar',
+            subtitle:
+                'Completed activities and upcoming CycleReady sessions in one timeline.',
+            children: [
+              _MetricWrap(metrics: [
+                (
+                  'Completed (14 days)',
+                  '${entries.where((item) => item.completed).length}'
+                ),
+                (
+                  'Planned (6 weeks)',
+                  '${entries.where((item) => !item.completed).length}'
+                ),
+                (
+                  'Next session',
+                  data.planned.where((item) => !item.day.isBefore(now)).isEmpty
+                      ? 'None'
+                      : data.planned
+                          .firstWhere((item) => !item.day.isBefore(now))
+                          .title
+                ),
+              ]),
+              _SectionCard(
+                title: 'Schedule',
+                child: entries.isEmpty
+                    ? const Text(
+                        'No completed or planned sessions are available in this period.')
+                    : Column(
+                        children: entries
+                            .map((entry) => ListTile(
+                                  leading: CircleAvatar(
+                                    backgroundColor: entry.completed
+                                        ? Colors.green.withValues(alpha: .18)
+                                        : Theme.of(context)
+                                            .colorScheme
+                                            .primaryContainer,
+                                    child: Icon(entry.completed
+                                        ? Icons.check
+                                        : Icons.schedule),
+                                  ),
+                                  title: Text(entry.title,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w700)),
+                                  subtitle: Text(
+                                      '${_longDate(entry.day)} • ${entry.detail}'),
+                                  trailing: Text(entry.completed
+                                      ? 'Completed'
+                                      : 'Planned'),
+                                ))
+                            .toList()),
+              ),
+            ],
+          );
+        },
+      );
+}
+
+class _WellnessPage extends ConsumerWidget {
+  const _WellnessPage();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => _PortalPage(
+        data: ref.watch(webPortalDataProvider),
+        builder: (data) {
+          final latest = data.recovery.isEmpty ? null : data.recovery.first;
+          final recent = data.recovery.take(14).toList().reversed.toList();
+          final body = data.body.take(12).toList().reversed.toList();
+          return _WebPageBody(
+            title: 'Wellness and recovery',
+            subtitle:
+                'Sleep, autonomic recovery, check-in signals and body trends.',
+            children: [
+              _MetricWrap(metrics: [
+                (
+                  'Sleep',
+                  latest?.sleepMinutes == null
+                      ? '—'
+                      : '${(latest!.sleepMinutes! / 60).toStringAsFixed(1)} h'
+                ),
+                (
+                  'HRV',
+                  latest?.hrvMilliseconds == null
+                      ? '—'
+                      : '${latest!.hrvMilliseconds!.toStringAsFixed(0)} ms'
+                ),
+                (
+                  'Resting HR',
+                  latest?.restingHeartRate == null
+                      ? '—'
+                      : '${latest!.restingHeartRate!.toStringAsFixed(0)} bpm'
+                ),
+                (
+                  'Weight',
+                  data.currentWeight == null
+                      ? '—'
+                      : '${data.currentWeight!.toStringAsFixed(1)} kg'
+                ),
+                ('Fatigue check-in', _value(latest?.fatigue, '/10')),
+                ('Stress check-in', _value(latest?.stress, '/10')),
+                ('Motivation', _value(latest?.motivation, '/10')),
+              ]),
+              _SectionCard(
+                title: 'HRV — recent records',
+                child: _BarTrend(
+                    values: recent
+                        .map((item) => item.hrvMilliseconds ?? 0)
+                        .toList(),
+                    colour: Colors.tealAccent),
+              ),
+              _SectionCard(
+                title: 'Sleep — recent records',
+                child: _BarTrend(
+                    values: recent
+                        .map((item) => (item.sleepMinutes ?? 0) / 60)
+                        .toList(),
+                    colour: Colors.lightBlueAccent),
+              ),
+              if (body.isNotEmpty)
+                _SectionCard(
+                  title: 'Body weight',
+                  child: _BarTrend(
+                      values: body.map((item) => item.weightKg).toList(),
+                      colour: Colors.orangeAccent),
+                ),
+            ],
+          );
+        },
+      );
+}
+
+class _NutritionPage extends ConsumerWidget {
+  const _NutritionPage();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => _PortalPage(
+        data: ref.watch(webPortalDataProvider),
+        builder: (data) {
+          final today = DateTime.now();
+          final progress = data.nutritionFor(today);
+          final entries = data.nutrition
+              .where((item) => _isSameDay(item.recordedAt, today))
+              .toList();
+          return _WebPageBody(
+            title: 'Nutrition and hydration',
+            subtitle:
+                'Today’s intake compared with the adaptive targets stored by CycleReady.',
+            children: [
+              _NutritionProgressGrid(progress: progress),
+              _SectionCard(
+                title: 'Today’s entries',
+                child: entries.isEmpty
+                    ? const Text(
+                        'No nutrition or hydration entries have been recorded today.')
+                    : Column(
+                        children: entries
+                            .map((entry) => ListTile(
+                                  leading: CircleAvatar(
+                                      child: Icon(entry.waterMillilitres > 0 &&
+                                              entry.calories == 0
+                                          ? Icons.water_drop
+                                          : Icons.restaurant)),
+                                  title: Text(entry.label,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w700)),
+                                  subtitle: Text(
+                                      '${entry.calories} kcal • ${entry.carbohydrateGrams.toStringAsFixed(0)} g carbs • ${entry.proteinGrams.toStringAsFixed(0)} g protein • ${entry.fatGrams.toStringAsFixed(0)} g fat'),
+                                  trailing: entry.waterMillilitres == 0
+                                      ? null
+                                      : Text('${entry.waterMillilitres} ml'),
+                                ))
+                            .toList()),
+              ),
+            ],
+          );
+        },
+      );
+}
+
+class _PortalPage extends StatelessWidget {
+  const _PortalPage({required this.data, required this.builder});
+  final AsyncValue<WebPortalData?> data;
+  final Widget Function(WebPortalData data) builder;
+  @override
+  Widget build(BuildContext context) => data.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, stack) => Center(child: _CloudError(error: error)),
+        data: (value) => value == null
+            ? const Center(child: Text('Sign in to view your CycleReady data.'))
+            : builder(value),
+      );
+}
+
+class _WebPageBody extends StatelessWidget {
+  const _WebPageBody(
+      {required this.title, required this.subtitle, required this.children});
+  final String title;
+  final String subtitle;
+  final List<Widget> children;
+  @override
+  Widget build(BuildContext context) => SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1280),
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title,
+                  style: Theme.of(context)
+                      .textTheme
+                      .headlineMedium
+                      ?.copyWith(fontWeight: FontWeight.w800)),
+              const SizedBox(height: 6),
+              Text(subtitle, style: Theme.of(context).textTheme.bodyLarge),
+              const SizedBox(height: 24),
+              for (final child in children) ...[
+                child,
+                const SizedBox(height: 18)
               ],
-            ),
+            ]),
           ),
         ),
       );
 }
+
+class _MetricWrap extends StatelessWidget {
+  const _MetricWrap({required this.metrics});
+  final List<(String, String)> metrics;
+  @override
+  Widget build(BuildContext context) => Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        children: metrics
+            .map((item) => _MetricChip(label: item.$1, value: item.$2))
+            .toList(),
+      );
+}
+
+class _SectionCard extends StatelessWidget {
+  const _SectionCard({required this.title, required this.child});
+  final String title;
+  final Widget child;
+  @override
+  Widget build(BuildContext context) => Card(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title,
+                style: Theme.of(context)
+                    .textTheme
+                    .titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 18),
+            child,
+          ]),
+        ),
+      );
+}
+
+class _ActivityTable extends StatelessWidget {
+  const _ActivityTable({required this.activities});
+  final List<WebActivity> activities;
+  @override
+  Widget build(BuildContext context) => SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: DataTable(
+            columns: const [
+              DataColumn(label: Text('Ride')),
+              DataColumn(label: Text('Distance')),
+              DataColumn(label: Text('Time')),
+              DataColumn(label: Text('Power')),
+              DataColumn(label: Text('Heart rate')),
+              DataColumn(label: Text('Load')),
+            ],
+            rows: activities
+                .map((ride) => DataRow(cells: [
+                      DataCell(SizedBox(
+                          width: 210,
+                          child: Text(
+                              '${ride.title}\n${_shortDate(ride.startedAt)}'))),
+                      DataCell(Text(
+                          '${(ride.distanceMetres / 1609.344).toStringAsFixed(1)} mi')),
+                      DataCell(Text(
+                          '${(ride.durationSeconds / 3600).toStringAsFixed(1)} h')),
+                      DataCell(Text(ride.averagePower == null
+                          ? '—'
+                          : '${ride.averagePower} W')),
+                      DataCell(Text(ride.averageHeartRate == null
+                          ? '—'
+                          : '${ride.averageHeartRate} bpm')),
+                      DataCell(Text(ride.trainingLoad.toStringAsFixed(0))),
+                    ]))
+                .toList()),
+      );
+}
+
+class _BarTrend extends StatelessWidget {
+  const _BarTrend({required this.values, required this.colour});
+  final List<double> values;
+  final Color colour;
+  @override
+  Widget build(BuildContext context) {
+    final max = values.fold<double>(
+        0, (current, value) => value > current ? value : current);
+    return SizedBox(
+      height: 150,
+      child: values.isEmpty || max <= 0
+          ? const Center(child: Text('Not enough data yet.'))
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: values
+                  .map((value) => Expanded(
+                        child: Tooltip(
+                          message: value.toStringAsFixed(1),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 3),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 250),
+                              height: 12 + 128 * value / max,
+                              decoration: BoxDecoration(
+                                  color: colour,
+                                  borderRadius: const BorderRadius.vertical(
+                                      top: Radius.circular(6))),
+                            ),
+                          ),
+                        ),
+                      ))
+                  .toList()),
+    );
+  }
+}
+
+class _NutritionProgressGrid extends StatelessWidget {
+  const _NutritionProgressGrid({required this.progress});
+  final WebNutritionProgress progress;
+  @override
+  Widget build(BuildContext context) {
+    final target = progress.target;
+    return _MetricWrap(metrics: [
+      ('Calories', _progress(progress.calories, target?.calories, 'kcal')),
+      (
+        'Carbohydrate',
+        _progress(progress.carbohydrateGrams, target?.carbohydrateGrams, 'g')
+      ),
+      ('Protein', _progress(progress.proteinGrams, target?.proteinGrams, 'g')),
+      ('Fat', _progress(progress.fatGrams, target?.fatGrams, 'g')),
+      (
+        'Water',
+        _progress(progress.waterMillilitres, target?.waterMillilitres, 'ml')
+      ),
+    ]);
+  }
+
+  String _progress(num value, num? target, String unit) => target == null
+      ? '${value.toStringAsFixed(0)} $unit'
+      : '${value.toStringAsFixed(0)} / ${target.toStringAsFixed(0)} $unit';
+}
+
+class _CalendarEntry {
+  const _CalendarEntry(this.day, this.title, this.detail, this.completed);
+  final DateTime day;
+  final String title;
+  final String detail;
+  final bool completed;
+}
+
+String _value(Object? value, String suffix) =>
+    value == null ? '—' : '$value$suffix';
+String _shortDate(DateTime day) => '${day.day}/${day.month}/${day.year}';
+String _longDate(DateTime day) =>
+    '${_weekday(day.weekday)} ${day.day}/${day.month}/${day.year}';
+String _weekday(int day) =>
+    const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][day - 1];
+bool _isSameDay(DateTime a, DateTime b) =>
+    a.year == b.year && a.month == b.month && a.day == b.day;

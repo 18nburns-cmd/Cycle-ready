@@ -20,6 +20,11 @@ coaching work can rely on stable athlete data and domain boundaries.
       verified with the athlete's account and synced headline metrics on
       25 August 2026.
 
+- [x] Replace the web placeholders with responsive Today, Performance,
+      Calendar, Wellness and Nutrition views backed by the authenticated
+      athlete snapshot, including ride metrics, FTP, power-to-weight, recovery,
+      check-ins, body trends, planned sessions and daily intake progress.
+
 - [ ] Add chunked cloud storage for second-by-second activity samples so web
       ride charts can load detailed power, heart-rate and cadence traces.
 

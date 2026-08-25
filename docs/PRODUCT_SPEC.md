@@ -40,6 +40,12 @@ was validated with ride totals, distance, duration, load, FTP, weight and HRV.
 Detailed second-by-second ride traces remain a separate cloud-storage
 milestone so large sample streams do not destabilise headline snapshot sync.
 
+The web portal provides five responsive sections. Today combines current
+training, recovery, body and intake signals; Performance exposes recent rides,
+load, FTP and power-to-weight; Calendar combines completed and planned work;
+Wellness charts sleep, HRV, resting heart rate, check-ins and weight; Nutrition
+compares recorded calories, macros and water with the app's daily targets.
+
 ---
 
 # Mission
