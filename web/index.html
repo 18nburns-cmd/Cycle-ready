@@ -55,7 +55,7 @@
         await Promise.all(cacheNames.map((name) => caches.delete(name)));
       }
       const bootstrap = document.createElement('script');
-      bootstrap.src = 'flutter_bootstrap.js';
+      bootstrap.src = `flutter_bootstrap.js?release=${Date.now()}`;
       document.body.appendChild(bootstrap);
     }
     startCycleReady();
