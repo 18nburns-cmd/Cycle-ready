@@ -18,18 +18,18 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="CycleReady cycling wellness dashboard.">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="cycle_ready">
+  <meta name="apple-mobile-web-app-title" content="CycleReady">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>cycle_ready</title>
+  <title>CycleReady Web</title>
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
@@ -41,6 +41,24 @@
     For more details:
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
-  <script src="flutter_bootstrap.js" async></script>
+  <script>
+    // GitHub Pages releases must not remain pinned to an obsolete Flutter
+    // service-worker cache. Clear legacy registrations before loading the
+    // current release; the Android app remains the offline-first client.
+    async function startCycleReady() {
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((registration) => registration.unregister()));
+      }
+      if ('caches' in window) {
+        const cacheNames = await caches.keys();
+        await Promise.all(cacheNames.map((name) => caches.delete(name)));
+      }
+      const bootstrap = document.createElement('script');
+      bootstrap.src = 'flutter_bootstrap.js';
+      document.body.appendChild(bootstrap);
+    }
+    startCycleReady();
+  </script>
 </body>
 </html>
