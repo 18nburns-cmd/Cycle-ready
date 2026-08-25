@@ -30,6 +30,20 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Validate cloud configuration
+        env:
+          SUPABASE_URL: ${{ vars.CYCLEREADY_SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.CYCLEREADY_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ]; then
+            echo "Missing repository variable: CYCLEREADY_SUPABASE_URL"
+            exit 1
+          fi
+          if [ -z "$SUPABASE_PUBLISHABLE_KEY" ]; then
+            echo "Missing repository secret: CYCLEREADY_SUPABASE_PUBLISHABLE_KEY"
+            exit 1
+          fi
+
       - name: Build web dashboard
         run: >-
           flutter build web --release
