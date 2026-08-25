@@ -45,6 +45,11 @@ power, heart rate, cadence, elevation and a privacy-preserving route trace.
 Rides without uploaded samples explain how to complete Android cloud sync
 instead of inventing charts or silently showing empty values.
 
+The production detailed-sample path was validated on Android and GitHub Pages:
+an authenticated phone upload populated the RLS-protected chunk table, and the
+same athlete opened real power, heart-rate, cadence, elevation and route views
+from a recent ride on the web.
+
 The web portal provides five responsive sections. Today combines current
 training, recovery, body and intake signals; Performance exposes recent rides,
 load, FTP and power-to-weight; Calendar combines completed and planned work;

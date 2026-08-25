@@ -25,10 +25,10 @@ coaching work can rely on stable athlete data and domain boundaries.
       athlete snapshot, including ride metrics, FTP, power-to-weight, recovery,
       check-ins, body trends, planned sessions and daily intake progress.
 
-- [ ] Add chunked cloud storage for second-by-second activity samples so web
+- [x] Add chunked cloud storage for second-by-second activity samples so web
       ride charts can load detailed power, heart-rate and cadence traces.
-      Implementation, RLS migration, Android transport, lazy web retrieval and
-      charts are complete; production migration/upload validation remains.
+      Supabase RLS, Android upload and lazy web power, heart-rate, cadence,
+      elevation and route views were validated end to end on 25 August 2026.
 
 - [x] Remove duplicate connected-service sync status from Today while keeping
       full status and manual retry controls in Connect.
