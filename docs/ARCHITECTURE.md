@@ -56,6 +56,14 @@ The web client must consume athlete data through an authenticated cloud-sync
 repository; it must never attempt to access Health Connect or the phone's local
 SQLite database directly.
 
+Large second-by-second activity streams are stored separately from the athlete
+snapshot in `activity_sample_chunks`. Android orders samples and writes chunks
+of at most 500 records through `CloudActivitySampleRepository`; the compact
+snapshot is committed last so a failed chunk request cannot create a false
+cross-device conflict. The web client fetches chunks lazily only when an
+authenticated athlete opens a ride. Supabase RLS restricts every chunk by
+`auth.uid()` and the compound athlete/activity/chunk key.
+
 Supabase configuration is injected with `CYCLEREADY_SUPABASE_URL` and
 `CYCLEREADY_SUPABASE_PUBLISHABLE_KEY` Dart defines. `CloudAuthRepository` owns
 account access and `CloudSnapshotRepository` owns cross-device state. The

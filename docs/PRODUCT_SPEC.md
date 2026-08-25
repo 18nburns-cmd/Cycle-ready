@@ -40,6 +40,11 @@ was validated with ride totals, distance, duration, load, FTP, weight and HRV.
 Detailed second-by-second ride traces remain a separate cloud-storage
 milestone so large sample streams do not destabilise headline snapshot sync.
 
+Detailed web ride analysis loads ordered sample chunks on demand and displays
+power, heart rate, cadence, elevation and a privacy-preserving route trace.
+Rides without uploaded samples explain how to complete Android cloud sync
+instead of inventing charts or silently showing empty values.
+
 The web portal provides five responsive sections. Today combines current
 training, recovery, body and intake signals; Performance exposes recent rides,
 load, FTP and power-to-weight; Calendar combines completed and planned work;

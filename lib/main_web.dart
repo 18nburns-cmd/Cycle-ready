@@ -5,6 +5,7 @@ import 'package:cycle_ready/src/features/cloud_sync/presentation/cloud_account_b
 import 'package:cycle_ready/src/features/cloud_sync/application/cloud_snapshot_provider.dart';
 import 'package:cycle_ready/src/features/cloud_sync/domain/web_dashboard_summary.dart';
 import 'package:cycle_ready/src/features/cloud_sync/domain/web_portal_data.dart';
+import 'package:cycle_ready/src/features/cloud_sync/presentation/web_ride_detail_dialog.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 Future<void> main() async {
@@ -836,23 +837,29 @@ class _ActivityTable extends StatelessWidget {
               DataColumn(label: Text('Load')),
             ],
             rows: activities
-                .map((ride) => DataRow(cells: [
-                      DataCell(SizedBox(
-                          width: 210,
-                          child: Text(
-                              '${ride.title}\n${_shortDate(ride.startedAt)}'))),
-                      DataCell(Text(
-                          '${(ride.distanceMetres / 1609.344).toStringAsFixed(1)} mi')),
-                      DataCell(Text(
-                          '${(ride.durationSeconds / 3600).toStringAsFixed(1)} h')),
-                      DataCell(Text(ride.averagePower == null
-                          ? '—'
-                          : '${ride.averagePower} W')),
-                      DataCell(Text(ride.averageHeartRate == null
-                          ? '—'
-                          : '${ride.averageHeartRate} bpm')),
-                      DataCell(Text(ride.trainingLoad.toStringAsFixed(0))),
-                    ]))
+                .map((ride) => DataRow(
+                      onSelectChanged: (_) => showDialog<void>(
+                        context: context,
+                        builder: (_) => WebRideDetailDialog(activity: ride),
+                      ),
+                      cells: [
+                        DataCell(SizedBox(
+                            width: 210,
+                            child: Text(
+                                '${ride.title}\n${_shortDate(ride.startedAt)}'))),
+                        DataCell(Text(
+                            '${(ride.distanceMetres / 1609.344).toStringAsFixed(1)} mi')),
+                        DataCell(Text(
+                            '${(ride.durationSeconds / 3600).toStringAsFixed(1)} h')),
+                        DataCell(Text(ride.averagePower == null
+                            ? '—'
+                            : '${ride.averagePower} W')),
+                        DataCell(Text(ride.averageHeartRate == null
+                            ? '—'
+                            : '${ride.averageHeartRate} bpm')),
+                        DataCell(Text(ride.trainingLoad.toStringAsFixed(0))),
+                      ],
+                    ))
                 .toList()),
       );
 }

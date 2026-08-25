@@ -27,6 +27,8 @@ coaching work can rely on stable athlete data and domain boundaries.
 
 - [ ] Add chunked cloud storage for second-by-second activity samples so web
       ride charts can load detailed power, heart-rate and cadence traces.
+      Implementation, RLS migration, Android transport, lazy web retrieval and
+      charts are complete; production migration/upload validation remains.
 
 - [x] Remove duplicate connected-service sync status from Today while keeping
       full status and manual retry controls in Connect.
@@ -102,4 +104,4 @@ coaching work can rely on stable athlete data and domain boundaries.
 ## Quality baseline
 
 - [x] `flutter analyze` completes without warnings.
-- [x] Full test suite passes (238 tests on 25 August 2026).
+- [x] Full test suite passes (242 tests on 25 August 2026).

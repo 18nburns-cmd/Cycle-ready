@@ -53,6 +53,7 @@ class CloudSyncController extends AsyncNotifier<CloudSyncState> {
       final service = CloudSyncService(
         database: ref.read(databaseProvider),
         repository: repository,
+        sampleRepository: ref.read(cloudActivitySampleRepositoryProvider),
         deviceName: 'CycleReady Android',
       );
       final outcome = await service.uploadIfSafe(

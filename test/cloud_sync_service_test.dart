@@ -1,6 +1,8 @@
 import 'package:cycle_ready/src/core/database/app_database.dart';
 import 'package:cycle_ready/src/features/cloud_sync/application/cloud_sync_service.dart';
+import 'package:cycle_ready/src/features/cloud_sync/domain/cloud_activity_samples.dart';
 import 'package:cycle_ready/src/features/cloud_sync/domain/cloud_snapshot.dart';
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -77,6 +79,41 @@ void main() {
     );
     expect(repository.saved!.sourceDevice, 'CycleReady device');
   });
+
+  test('detailed samples upload in chunks before snapshot commit', () async {
+    await database.into(database.activities).insert(ActivitiesCompanion.insert(
+          id: 'ride-1',
+          source: 'test',
+          startedAt: now,
+          durationSeconds: 3,
+          distanceMetres: 30,
+        ));
+    await database.saveActivitySamples([
+      ActivitySamplesCompanion.insert(
+        activityId: 'ride-1',
+        elapsedSeconds: 0,
+        power: const Value(180),
+      ),
+      ActivitySamplesCompanion.insert(
+        activityId: 'ride-1',
+        elapsedSeconds: 1,
+        power: const Value(220),
+      ),
+    ]);
+    final samples = _MemorySampleRepository();
+    final service = CloudSyncService(
+      database: database,
+      repository: repository,
+      sampleRepository: samples,
+      deviceName: 'Android',
+      now: () => now,
+    );
+
+    expect(await service.uploadIfSafe(), CloudSyncOutcome.uploaded);
+    expect(samples.chunks['ride-1'], hasLength(1));
+    expect(samples.chunks['ride-1']!.single.samples, hasLength(2));
+    expect(repository.saved, isNotNull);
+  });
 }
 
 class _MemoryCloudRepository implements CloudSnapshotRepository {
@@ -90,5 +127,21 @@ class _MemoryCloudRepository implements CloudSnapshotRepository {
   Future<void> save(CloudSnapshot snapshot) async {
     saved = snapshot;
     value = snapshot;
+  }
+}
+
+class _MemorySampleRepository implements CloudActivitySampleRepository {
+  final chunks = <String, List<CloudActivitySampleChunk>>{};
+
+  @override
+  Future<List<CloudActivitySample>> fetchForActivity(String activityId) async =>
+      chunks[activityId]?.expand((chunk) => chunk.samples).toList() ?? const [];
+
+  @override
+  Future<void> replaceActivityChunks(
+    String activityId,
+    List<CloudActivitySampleChunk> values,
+  ) async {
+    chunks[activityId] = values;
   }
 }
