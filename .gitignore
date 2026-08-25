@@ -1,0 +1,13 @@
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+android/.gradle/
+android/local.properties
+lib/**/*.g.dart
+config/cloud_defines.json
+.codex-gitconfig
+.idea/
+*.iml
+focustag/
