@@ -22,7 +22,8 @@ keystore, passwords, Firebase file or generated cloud configuration.
 ## Publishing
 
 Increase `version` in `pubspec.yaml`, create a matching tag such as `v0.2.0`,
-and push the tag. The Android release workflow runs tests and analysis, builds
+and push the tag. The Android release workflow regenerates Drift database
+sources on its clean Linux runner, runs tests and analysis, builds
 the arm64 APK, signs it, creates a SHA-256 checksum and attaches both files to
 the GitHub release. It can also be started manually from GitHub Actions.
 

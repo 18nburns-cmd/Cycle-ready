@@ -35,6 +35,8 @@ jobs:
           mkdir -p config
           printf '{"CYCLEREADY_SUPABASE_URL":"%s","CYCLEREADY_SUPABASE_PUBLISHABLE_KEY":"%s"}' "$SUPABASE_URL" "$SUPABASE_KEY" > config/cloud_defines.ci.json
       - run: flutter pub get
+      - name: Generate Drift database sources
+        run: dart run build_runner build --delete-conflicting-outputs
       - run: flutter test
       - run: flutter analyze
       - name: Build signed APK
