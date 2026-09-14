@@ -39,7 +39,7 @@ class HealthConnectionController extends AsyncNotifier<HealthConnectionState> {
       if (granted.isEmpty) {
         return const HealthConnectionState(authorized: false);
       }
-      return _sync(
+      return await _sync(
         granted,
         message: 'Health Connect synced automatically when CycleReady opened.',
       );

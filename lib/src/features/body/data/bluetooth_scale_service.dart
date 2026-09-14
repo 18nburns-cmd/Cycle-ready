@@ -133,7 +133,7 @@ class BluetoothScaleService {
         },
       );
       await FlutterBluePlus.stopScan();
-      return _capture(
+      return await _capture(
         result.device,
         measurementTimeout,
         advertisementPackets: _advertisementPackets(result),
