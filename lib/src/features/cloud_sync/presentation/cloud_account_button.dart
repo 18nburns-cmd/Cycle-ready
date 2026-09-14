@@ -1,4 +1,5 @@
 import 'package:cycle_ready/src/features/cloud_sync/application/cloud_auth_provider.dart';
+import 'package:cycle_ready/src/features/cloud_sync/application/secure_sign_out_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -34,8 +35,7 @@ class CloudAccountButton extends ConsumerWidget {
             )
           : PopupMenuButton<String>(
               tooltip: 'CycleReady cloud account',
-              onSelected: (_) =>
-                  ref.read(cloudAuthRepositoryProvider).signOut(),
+              onSelected: (_) => _confirmSignOut(context, ref),
               itemBuilder: (_) => const [
                 PopupMenuItem(value: 'sign-out', child: Text('Sign out')),
               ],
@@ -45,6 +45,47 @@ class CloudAccountButton extends ConsumerWidget {
               ),
             ),
     );
+  }
+
+  Future<void> _confirmSignOut(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Sign out of CycleReady?'),
+        content: const Text(
+          'To protect your health information, signing out removes this '
+          'account\'s rides, health records, plans, nutrition, pending uploads '
+          'and connected-service credentials from this phone. Cloud records '
+          'remain available when you sign in again.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Remove local data and sign out'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    try {
+      await ref.read(secureSignOutControllerProvider).signOut();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Local account data removed. Signed out.')),
+        );
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Sign out stopped safely: $error')),
+        );
+      }
+    }
   }
 }
 
@@ -102,6 +143,10 @@ class _CloudSignInDialogState extends ConsumerState<_CloudSignInDialog> {
         ),
         actions: [
           TextButton(
+            onPressed: busy ? null : _resetPassword,
+            child: const Text('Forgot password?'),
+          ),
+          TextButton(
             onPressed: busy ? null : () => Navigator.pop(context),
             child: const Text('Cancel'),
           ),
@@ -115,6 +160,36 @@ class _CloudSignInDialogState extends ConsumerState<_CloudSignInDialog> {
           ),
         ],
       );
+
+  Future<void> _resetPassword() async {
+    if (!email.text.contains('@')) {
+      setState(() => error = 'Enter your email address first.');
+      return;
+    }
+    setState(() {
+      busy = true;
+      error = null;
+    });
+    try {
+      await ref
+          .read(cloudAuthRepositoryProvider)
+          .requestPasswordReset(email: email.text);
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Password recovery email sent. Check your inbox.'),
+        ),
+      );
+    } catch (exception) {
+      if (mounted) {
+        setState(() {
+          busy = false;
+          error = exception.toString();
+        });
+      }
+    }
+  }
 
   Future<void> _submit({required bool create}) async {
     if (!email.text.contains('@') || password.text.length < 8) {

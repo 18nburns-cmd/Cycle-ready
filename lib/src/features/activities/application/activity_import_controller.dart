@@ -73,6 +73,13 @@ class ActivityImportController extends AsyncNotifier<String?> {
         durationSeconds: parsed.durationSeconds,
       );
       if (duplicate) return 'That ride is already in CycleReady.';
+      if (await _database.hasDeletedActivityMatch(
+        fileHash: parsed.hash,
+        startedAt: parsed.startedAt,
+        durationSeconds: parsed.durationSeconds,
+      )) {
+        return 'That previously deleted ride remains excluded.';
+      }
       final settings = await _database.getAthleteSettings();
       final load = parsed.normalisedPower == null
           ? null
@@ -126,6 +133,13 @@ class ActivityImportController extends AsyncNotifier<String?> {
   Future<int> importHealthWorkouts(List<ImportedWorkout> workouts) async {
     var imported = 0;
     for (final workout in workouts) {
+      if (await _database.hasDeletedActivityMatch(
+        externalId: workout.externalId,
+        startedAt: workout.startedAt,
+        durationSeconds: workout.durationSeconds,
+      )) {
+        continue;
+      }
       if (await _database.hasActivityMatch(
         externalId: workout.externalId,
         startedAt: workout.startedAt,
@@ -164,6 +178,13 @@ class ActivityImportController extends AsyncNotifier<String?> {
     var imported = 0;
     var detailed = 0;
     for (final ride in remote) {
+      if (await _database.hasDeletedActivityMatch(
+        externalId: ride.id,
+        startedAt: ride.startedAt,
+        durationSeconds: ride.durationSeconds,
+      )) {
+        continue;
+      }
       final existing = await _database.findActivityMatch(
         externalId: ride.id,
         startedAt: ride.startedAt,

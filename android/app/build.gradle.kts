@@ -1,7 +1,15 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
     id("dev.flutter.flutter-gradle-plugin")
+    id("com.google.gms.google-services")
+}
+
+val releaseKeystore = rootProject.file("key.properties")
+val releaseProperties = Properties().apply {
+    if (releaseKeystore.exists()) releaseKeystore.inputStream().use { load(it) }
 }
 
 android {
@@ -23,9 +31,23 @@ android {
         versionName = flutter.versionName
         ndk { abiFilters += listOf("arm64-v8a") }
     }
+    signingConfigs {
+        if (releaseKeystore.exists()) {
+            create("privateRelease") {
+                keyAlias = releaseProperties["keyAlias"] as String
+                keyPassword = releaseProperties["keyPassword"] as String
+                storeFile = file(releaseProperties["storeFile"] as String)
+                storePassword = releaseProperties["storePassword"] as String
+            }
+        }
+    }
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (releaseKeystore.exists()) {
+                signingConfigs.getByName("privateRelease")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

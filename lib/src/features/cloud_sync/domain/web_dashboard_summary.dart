@@ -1,4 +1,5 @@
 import 'package:cycle_ready/src/features/cloud_sync/domain/cloud_snapshot.dart';
+import 'package:cycle_ready/src/features/cloud_sync/domain/web_portal_data.dart';
 
 class WebDashboardSummary {
   const WebDashboardSummary({
@@ -54,6 +55,29 @@ class WebDashboardSummary {
       updatedAt: snapshot.updatedAt,
     );
   }
+
+  factory WebDashboardSummary.fromPortal(WebPortalData portal) =>
+      WebDashboardSummary(
+        rideCount: portal.activities.length,
+        totalDistanceMetres: portal.activities.fold(
+          0,
+          (sum, ride) => sum + ride.distanceMetres,
+        ),
+        totalDurationSeconds: portal.activities.fold(
+          0,
+          (sum, ride) => sum + ride.durationSeconds,
+        ),
+        totalTrainingLoad: portal.activities.fold(
+          0,
+          (sum, ride) => sum + ride.trainingLoad,
+        ),
+        ftp: portal.ftp,
+        weightKg: portal.currentWeight,
+        latestHrv: portal.recovery.isEmpty
+            ? null
+            : portal.recovery.first.hrvMilliseconds,
+        updatedAt: portal.updatedAt,
+      );
 }
 
 List<Map<String, Object?>> _rows(

@@ -314,6 +314,80 @@ class IntervalsIcuService {
     return decoded is List ? decoded.length : workouts.length;
   }
 
+  Future<int> replacePlannedWorkouts(
+    List<IntervalsPlannedWorkout> workouts, {
+    required List<String> ownedExternalIds,
+  }) async {
+    final value = await credentials();
+    if (value == null) throw StateError('Intervals.icu is not connected.');
+    if (ownedExternalIds.isNotEmpty) {
+      final response = await _client.put(
+        Uri.parse(
+          'https://intervals.icu/api/v1/athlete/${value.athleteId}/events/bulk-delete',
+        ),
+        headers: {
+          ..._headers(value),
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode([
+          for (final externalId in ownedExternalIds)
+            {'external_id': externalId},
+        ]),
+      );
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw StateError(
+          'Intervals.icu calendar cleanup returned ${response.statusCode}.',
+        );
+      }
+    }
+    return publishPlannedWorkouts(workouts);
+  }
+
+  Future<List<IntervalsRemoteWorkout>> fetchPlannedWorkouts({
+    required DateTime oldest,
+    required DateTime newest,
+  }) async {
+    final value = await credentials();
+    if (value == null) throw StateError('Intervals.icu is not connected.');
+    String day(DateTime value) => '${value.year.toString().padLeft(4, '0')}-'
+        '${value.month.toString().padLeft(2, '0')}-'
+        '${value.day.toString().padLeft(2, '0')}';
+    final response = await _client.get(
+      Uri.parse(
+        'https://intervals.icu/api/v1/athlete/${value.athleteId}/events',
+      ).replace(queryParameters: {
+        'oldest': day(oldest),
+        'newest': day(newest),
+      }),
+      headers: _headers(value),
+    );
+    if (response.statusCode != 200) {
+      throw StateError(
+        'Intervals.icu calendar read returned ${response.statusCode}.',
+      );
+    }
+    final decoded = jsonDecode(response.body);
+    if (decoded is! List) return const [];
+    return decoded.whereType<Map<String, dynamic>>().where((row) {
+      return row['external_id'] != null && row['category'] == 'WORKOUT';
+    }).map((row) {
+      final localDate = '${row['start_date_local']}'.split('T').first;
+      return IntervalsRemoteWorkout(
+        providerId: '${row['id']}',
+        workout: IntervalsPlannedWorkout(
+          externalId: '${row['external_id']}',
+          day: DateTime.parse(localDate),
+          name: '${row['name'] ?? ''}',
+          description: '${row['description'] ?? ''}',
+          durationSeconds:
+              ((row['planned_duration'] ?? row['moving_time']) as num?)
+                      ?.round() ??
+                  0,
+        ),
+      );
+    }).toList(growable: false);
+  }
+
   Future<List<IntervalsPowerSample>> fetchPowerSamples(
       String activityId) async {
     final samples = await fetchActivitySamples(activityId);

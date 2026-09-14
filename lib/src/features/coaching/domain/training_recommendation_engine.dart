@@ -1,3 +1,5 @@
+import 'package:cycle_ready/src/features/coaching/domain/adaptive_training_policy.dart';
+
 enum TrainingRecommendation {
   rest,
   recovery,
@@ -22,11 +24,18 @@ class RecommendationThresholds {
   final int goodMax;
 }
 
-class TrainingRecommendationEngine {
-  const TrainingRecommendationEngine({
+class DecisionEngine {
+  const DecisionEngine({
     this.thresholds = const RecommendationThresholds(),
+    this.policy = const AdaptiveTrainingPolicy(),
   });
   final RecommendationThresholds thresholds;
+  final AdaptiveTrainingPolicy policy;
+
+  AdaptiveTrainingPolicyDecision evaluatePolicy(
+    AdaptiveTrainingPolicyInput input,
+  ) =>
+      policy.evaluate(input);
 
   TrainingRecommendation recommend({
     required int readiness,
@@ -51,3 +60,5 @@ class TrainingRecommendationEngine {
         : TrainingRecommendation.threshold;
   }
 }
+
+typedef TrainingRecommendationEngine = DecisionEngine;

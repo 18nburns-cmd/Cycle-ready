@@ -87,15 +87,46 @@ class TrainingMetrics {
   final double rampRate;
   final List<FitnessPoint> history;
 
-  String get loadWarning {
-    if (rampRate > 8) {
-      return 'Training load is rising quickly. Prioritise recovery.';
+  /// Chronic Training Load: the 42-day exponentially weighted load.
+  double get ctl => fitness;
+
+  /// Acute Training Load: the 7-day exponentially weighted load.
+  double get atl => fatigue;
+
+  /// Training Stress Balance, calculated as CTL minus ATL.
+  double get tsb => form;
+
+  double? get acuteChronicRatio => ctl <= 0 ? null : atl / ctl;
+
+  FitnessCondition get condition {
+    final ratio = acuteChronicRatio;
+    if (tsb < -25 && rampRate > 8 && ratio != null && ratio > 1.5) {
+      return FitnessCondition.overtrainingRisk;
     }
-    if (form < -25) return 'Fatigue is high relative to fitness.';
-    if (form > 15) return 'You are relatively fresh.';
-    return 'Training load is within a productive range.';
+    if (ctl >= 10 && rampRate < -2 && ratio != null && ratio < .75) {
+      return FitnessCondition.detraining;
+    }
+    return FitnessCondition.productive;
+  }
+
+  String get loadWarning {
+    return switch (condition) {
+      FitnessCondition.overtrainingRisk =>
+        'Acute load, negative form and ramp rate indicate overload risk. Prioritise recovery.',
+      FitnessCondition.detraining =>
+        'Chronic load is falling while recent training is below your established fitness load.',
+      FitnessCondition.productive when rampRate > 8 =>
+        'Training load is rising quickly. Prioritise recovery.',
+      FitnessCondition.productive when form < -25 =>
+        'Fatigue is high relative to fitness.',
+      FitnessCondition.productive when form > 15 => 'You are relatively fresh.',
+      FitnessCondition.productive =>
+        'Training load is within a productive range.',
+    };
   }
 }
+
+enum FitnessCondition { productive, overtrainingRisk, detraining }
 
 enum ForecastLoadStatus { maintaining, productive, cautious, excessive }
 

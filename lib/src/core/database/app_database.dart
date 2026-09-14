@@ -41,6 +41,19 @@ class ActivitySamples extends Table {
   Set<Column<Object>> get primaryKey => {activityId, elapsedSeconds};
 }
 
+class DeletedActivities extends Table {
+  TextColumn get id => text()();
+  TextColumn get source => text()();
+  TextColumn get externalId => text().nullable()();
+  TextColumn get fileHash => text().nullable()();
+  DateTimeColumn get startedAt => dateTime()();
+  IntColumn get durationSeconds => integer()();
+  DateTimeColumn get deletedAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
 class AthleteSettings extends Table {
   IntColumn get id => integer().withDefault(const Constant(1))();
   TextColumn get athleteName => text().withDefault(const Constant('Neil'))();
@@ -72,6 +85,35 @@ class AthleteSettings extends Table {
 
   @override
   Set<Column<Object>> get primaryKey => {id};
+}
+
+class AthleteStates extends Table {
+  IntColumn get id => integer().withDefault(const Constant(1))();
+  DateTimeColumn get updatedAt => dateTime()();
+  RealColumn get fitness => real()();
+  RealColumn get fatigue => real()();
+  RealColumn get freshness => real()();
+  RealColumn get readiness => real()();
+  RealColumn get recovery => real()();
+  RealColumn get hrvTrend => real().nullable()();
+  RealColumn get weightTrend => real().nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+class AthleteStateHistory extends Table {
+  DateTimeColumn get updatedAt => dateTime()();
+  RealColumn get fitness => real()();
+  RealColumn get fatigue => real()();
+  RealColumn get freshness => real()();
+  RealColumn get readiness => real()();
+  RealColumn get recovery => real()();
+  RealColumn get hrvTrend => real().nullable()();
+  RealColumn get weightTrend => real().nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {updatedAt};
 }
 
 class DailyRecoveryRecords extends Table {
@@ -287,10 +329,28 @@ class WorkoutResponseProfiles extends Table {
   Set<Column<Object>> get primaryKey => {workoutType};
 }
 
+class PendingCloudMutations extends Table {
+  TextColumn get id => text()();
+  TextColumn get entityType => text()();
+  TextColumn get entityId => text()();
+  TextColumn get operation => text()();
+  TextColumn get payloadJson => text()();
+  TextColumn get baseVersion => text().nullable()();
+  DateTimeColumn get createdAt => dateTime()();
+  IntColumn get attemptCount => integer().withDefault(const Constant(0))();
+  TextColumn get status => text().withDefault(const Constant('pending'))();
+  TextColumn get conflictReason => text().nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
 @DriftDatabase(tables: [
   Activities,
   ActivitySamples,
   AthleteSettings,
+  AthleteStates,
+  AthleteStateHistory,
   DailyRecoveryRecords,
   BodyMeasurements,
   PlannedSessions,
@@ -307,12 +367,14 @@ class WorkoutResponseProfiles extends Table {
   StrengthSets,
   CoachingDecisions,
   WorkoutResponseProfiles,
+  PendingCloudMutations,
+  DeletedActivities,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 20;
+  int get schemaVersion => 24;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -430,8 +492,49 @@ class AppDatabase extends _$AppDatabase {
               athleteSettings.ridingSafetyProfile,
             );
           }
+          if (from < 21) {
+            await m.createTable(athleteStates);
+          }
+          if (from < 22) {
+            await m.createTable(athleteStateHistory);
+          }
+          if (from < 23) {
+            await m.createTable(pendingCloudMutations);
+          }
+          if (from < 24) {
+            await m.createTable(deletedActivities);
+          }
         },
       );
+
+  Future<void> enqueueCloudMutation(PendingCloudMutationsCompanion mutation) =>
+      into(pendingCloudMutations).insertOnConflictUpdate(mutation);
+
+  Future<List<PendingCloudMutation>> pendingCloudMutationRows() =>
+      (select(pendingCloudMutations)
+            ..where((row) => row.status.equals('pending'))
+            ..orderBy([(row) => OrderingTerm.asc(row.createdAt)]))
+          .get();
+
+  Future<void> updateCloudMutationStatus(
+    String id, {
+    required String status,
+    String? conflictReason,
+    bool incrementAttempt = false,
+  }) async {
+    final current = await (select(pendingCloudMutations)
+          ..where((row) => row.id.equals(id)))
+        .getSingleOrNull();
+    if (current == null) return;
+    await (update(pendingCloudMutations)..where((row) => row.id.equals(id)))
+        .write(PendingCloudMutationsCompanion(
+      status: Value(status),
+      conflictReason: Value(conflictReason),
+      attemptCount: incrementAttempt
+          ? Value(current.attemptCount + 1)
+          : Value(current.attemptCount),
+    ));
+  }
 
   Future<DailyRecoveryRecord?> recoveryForDay(DateTime value) {
     final day = DateTime(value.year, value.month, value.day);
@@ -512,6 +615,60 @@ class AppDatabase extends _$AppDatabase {
         ..orderBy([(row) => OrderingTerm.asc(row.elapsedSeconds)]))
       .get();
 
+  Future<bool> hasDeletedActivityMatch({
+    String? externalId,
+    String? fileHash,
+    required DateTime startedAt,
+    required int durationSeconds,
+  }) async {
+    final query = select(deletedActivities)
+      ..where((row) =>
+          (externalId != null
+              ? row.externalId.equals(externalId)
+              : const Constant(false)) |
+          (fileHash != null
+              ? row.fileHash.equals(fileHash)
+              : const Constant(false)) |
+          (row.startedAt.isBetweenValues(
+                startedAt.subtract(const Duration(minutes: 2)),
+                startedAt.add(const Duration(minutes: 2)),
+              ) &
+              row.durationSeconds.isBetweenValues(
+                durationSeconds - 120,
+                durationSeconds + 120,
+              )))
+      ..limit(1);
+    final matches = await query.get();
+    return matches.isNotEmpty;
+  }
+
+  Future<void> deleteActivityAndRemember(String id) async {
+    final activity = await activityById(id);
+    if (activity == null) return;
+    await transaction(() async {
+      await into(deletedActivities).insertOnConflictUpdate(
+        DeletedActivitiesCompanion.insert(
+          id: activity.id,
+          source: activity.source,
+          externalId: Value(activity.externalId),
+          fileHash: Value(activity.fileHash),
+          startedAt: activity.startedAt,
+          durationSeconds: activity.durationSeconds,
+          deletedAt: DateTime.now(),
+        ),
+      );
+      await (delete(postRideFeedbacks)
+            ..where((row) => row.activityId.equals(id)))
+          .go();
+      await (delete(rideCoachReports)
+            ..where((row) => row.activityId.equals(id)))
+          .go();
+      await (delete(activitySamples)..where((row) => row.activityId.equals(id)))
+          .go();
+      await (delete(activities)..where((row) => row.id.equals(id))).go();
+    });
+  }
+
   Future<void> saveActivity(
     ActivitiesCompanion activity,
     List<ActivitySamplesCompanion> samples,
@@ -585,6 +742,34 @@ class AppDatabase extends _$AppDatabase {
   Future<void> saveAthleteSettings(AthleteSettingsCompanion value) =>
       into(athleteSettings).insertOnConflictUpdate(value);
 
+  Future<AthleteState?> getAthleteState() =>
+      select(athleteStates).getSingleOrNull();
+
+  Stream<AthleteState?> watchAthleteState() =>
+      select(athleteStates).watchSingleOrNull();
+
+  Future<void> saveAthleteState(AthleteStatesCompanion value) =>
+      into(athleteStates).insertOnConflictUpdate(value);
+
+  Future<List<AthleteStateHistoryData>> getAthleteStateHistory({
+    int? limit,
+  }) {
+    final query = select(athleteStateHistory)
+      ..orderBy([(row) => OrderingTerm.desc(row.updatedAt)]);
+    if (limit != null) query.limit(limit);
+    return query.get();
+  }
+
+  Stream<List<AthleteStateHistoryData>> watchAthleteStateHistory() =>
+      (select(athleteStateHistory)
+            ..orderBy([(row) => OrderingTerm.asc(row.updatedAt)]))
+          .watch();
+
+  Future<void> saveAthleteStateHistory(
+    AthleteStateHistoryCompanion value,
+  ) =>
+      into(athleteStateHistory).insertOnConflictUpdate(value);
+
   Stream<PlannedSession?> watchPlannedSession(DateTime value) {
     final day = DateTime(value.year, value.month, value.day);
     return (select(plannedSessions)..where((row) => row.day.equals(day)))
@@ -647,10 +832,19 @@ class AppDatabase extends _$AppDatabase {
 
   Future<EventGoal?> getEventGoal() => select(eventGoals).getSingleOrNull();
 
+  Stream<List<EventGoal>> watchEventGoals() =>
+      (select(eventGoals)..orderBy([(row) => OrderingTerm.asc(row.eventDate)]))
+          .watch();
+
+  Future<List<EventGoal>> getEventGoals() =>
+      (select(eventGoals)..orderBy([(row) => OrderingTerm.asc(row.eventDate)]))
+          .get();
+
   Future<void> saveEventGoal(EventGoalsCompanion value) =>
       into(eventGoals).insertOnConflictUpdate(value);
 
-  Future<void> deleteEventGoal() => delete(eventGoals).go();
+  Future<void> deleteEventGoal(int id) =>
+      (delete(eventGoals)..where((row) => row.id.equals(id))).go();
 
   Future<int> saveFtpEstimate(FtpEstimatesCompanion value) =>
       into(ftpEstimates).insert(value);
@@ -731,7 +925,16 @@ class AppDatabase extends _$AppDatabase {
         'activitySamples': (await select(activitySamples).get())
             .map((row) => row.toJson())
             .toList(),
+        'deletedActivities': (await select(deletedActivities).get())
+            .map((row) => row.toJson())
+            .toList(),
         'athleteSettings': (await select(athleteSettings).get())
+            .map((row) => row.toJson())
+            .toList(),
+        'athleteStates': (await select(athleteStates).get())
+            .map((row) => row.toJson())
+            .toList(),
+        'athleteStateHistory': (await select(athleteStateHistory).get())
             .map((row) => row.toJson())
             .toList(),
         'dailyRecovery': (await select(dailyRecoveryRecords).get())
@@ -782,6 +985,9 @@ class AppDatabase extends _$AppDatabase {
         'workoutResponseProfiles': (await select(workoutResponseProfiles).get())
             .map((row) => row.toJson())
             .toList(),
+        'pendingCloudMutations': (await select(pendingCloudMutations).get())
+            .map((row) => row.toJson())
+            .toList(),
       };
 
   Future<void> restoreSnapshot(Map<String, dynamic> snapshot) async {
@@ -810,8 +1016,15 @@ class AppDatabase extends _$AppDatabase {
         rows('activities').map(Activity.fromJson).toList();
     final restoredSamples =
         rows('activitySamples').map(ActivitySample.fromJson).toList();
+    final restoredDeletedActivities =
+        rows('deletedActivities').map(DeletedActivity.fromJson).toList();
     final restoredSettings =
         rows('athleteSettings').map(AthleteSetting.fromJson).toList();
+    final restoredStates =
+        rows('athleteStates').map(AthleteState.fromJson).toList();
+    final restoredStateHistory = rows('athleteStateHistory')
+        .map(AthleteStateHistoryData.fromJson)
+        .toList();
     final restoredRecovery =
         rows('dailyRecovery').map(DailyRecoveryRecord.fromJson).toList();
     final restoredBody =
@@ -843,6 +1056,9 @@ class AppDatabase extends _$AppDatabase {
     final restoredResponses = rows('workoutResponseProfiles')
         .map(WorkoutResponseProfile.fromJson)
         .toList();
+    final restoredCloudMutations = rows('pendingCloudMutations')
+        .map(PendingCloudMutation.fromJson)
+        .toList();
 
     await transaction(() async {
       await eraseAllUserData();
@@ -857,7 +1073,10 @@ class AppDatabase extends _$AppDatabase {
 
       await insertAll(activities, restoredActivities);
       await insertAll(activitySamples, restoredSamples);
+      await insertAll(deletedActivities, restoredDeletedActivities);
       await insertAll(athleteSettings, restoredSettings);
+      await insertAll(athleteStates, restoredStates);
+      await insertAll(athleteStateHistory, restoredStateHistory);
       await insertAll(dailyRecoveryRecords, restoredRecovery);
       await insertAll(bodyMeasurements, restoredBody);
       await insertAll(plannedSessions, restoredPlans);
@@ -874,6 +1093,7 @@ class AppDatabase extends _$AppDatabase {
       await insertAll(strengthSets, restoredStrengthSets);
       await insertAll(coachingDecisions, restoredDecisions);
       await insertAll(workoutResponseProfiles, restoredResponses);
+      await insertAll(pendingCloudMutations, restoredCloudMutations);
     });
   }
 
@@ -884,6 +1104,7 @@ class AppDatabase extends _$AppDatabase {
         await delete(postRideFeedbacks).go();
         await delete(activitySamples).go();
         await delete(activities).go();
+        await delete(deletedActivities).go();
         await delete(dailyRecoveryRecords).go();
         await delete(bodyMeasurements).go();
         await delete(plannedSessions).go();
@@ -891,12 +1112,15 @@ class AppDatabase extends _$AppDatabase {
         await delete(trainingPreferences).go();
         await delete(eventGoals).go();
         await delete(athleteSettings).go();
+        await delete(athleteStates).go();
+        await delete(athleteStateHistory).go();
         await delete(nutritionEntries).go();
         await delete(dailyNutritionTargets).go();
         await delete(savedFoods).go();
         await delete(strengthSets).go();
         await delete(strengthSessions).go();
         await delete(strengthProfiles).go();
+        await delete(pendingCloudMutations).go();
       });
 
   Stream<List<NutritionEntry>> watchNutritionEntries(DateTime value) {

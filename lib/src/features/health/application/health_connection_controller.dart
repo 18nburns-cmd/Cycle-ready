@@ -1,10 +1,13 @@
 import 'package:cycle_ready/src/features/health/data/health_connect_repository.dart';
+import 'package:cycle_ready/src/core/database/database_provider.dart';
 import 'package:cycle_ready/src/features/health/domain/health_snapshot.dart';
 import 'package:cycle_ready/src/features/activities/application/activity_import_controller.dart';
 import 'package:cycle_ready/src/features/readiness/application/recovery_controller.dart';
 import 'package:cycle_ready/src/features/athlete/application/athlete_profile_controller.dart';
 import 'package:cycle_ready/src/features/body/data/drift_body_measurement_repository.dart';
 import 'package:cycle_ready/src/features/body/domain/body_metric.dart';
+import 'package:cycle_ready/src/features/health/application/health_cloud_sync_service.dart';
+import 'package:cycle_ready/src/features/offline_sync/application/offline_mutation_sync_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:health/health.dart';
 
@@ -99,6 +102,17 @@ class HealthConnectionController extends AsyncNotifier<HealthConnectionState> {
     await ref
         .read(activityImportControllerProvider.notifier)
         .importHealthWorkouts(snapshot.workouts);
+    await HealthCloudSyncService(
+      ref.read(offlineMutationRepositoryProvider),
+    ).enqueue(
+      snapshot,
+      includeWorkout: (workout) async =>
+          !await ref.read(databaseProvider).hasDeletedActivityMatch(
+                externalId: workout.externalId,
+                startedAt: workout.startedAt,
+                durationSeconds: workout.durationSeconds,
+              ),
+    );
     if (snapshot.bodyMeasurements.isNotEmpty) {
       await ref
           .read(bodyMeasurementRepositoryProvider)

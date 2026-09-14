@@ -3,11 +3,14 @@ import 'package:cycle_ready/src/core/formatting/units.dart';
 import 'package:cycle_ready/src/features/activities/data/activity_repository.dart';
 import 'package:cycle_ready/src/features/activities/domain/training_metrics.dart';
 import 'package:cycle_ready/src/features/activities/application/power_curve_provider.dart';
+import 'package:cycle_ready/src/features/activities/application/post_ride_feedback_controller.dart';
 import 'package:cycle_ready/src/features/activities/domain/performance_momentum.dart';
 import 'package:cycle_ready/src/features/activities/domain/training_response.dart';
 import 'package:cycle_ready/src/features/coaching/application/coaching_provider.dart';
 import 'package:cycle_ready/src/features/coaching/application/planned_session_controller.dart';
+import 'package:cycle_ready/src/features/coaching/application/daily_coaching_status_provider.dart';
 import 'package:cycle_ready/src/features/coaching/domain/daily_coaching.dart';
+import 'package:cycle_ready/src/features/coaching/domain/daily_coaching_status.dart';
 import 'package:cycle_ready/src/features/coaching/domain/structured_workout.dart';
 import 'package:cycle_ready/src/features/coaching/presentation/workout_profile_chart.dart';
 import 'package:cycle_ready/src/features/readiness/application/readiness_provider.dart';
@@ -16,12 +19,47 @@ import 'package:cycle_ready/src/features/readiness/domain/readiness_result.dart'
 import 'package:cycle_ready/src/features/readiness/domain/recovery_input.dart';
 import 'package:cycle_ready/src/features/readiness/domain/recovery_time.dart';
 import 'package:cycle_ready/src/features/dashboard/domain/personal_greeting.dart';
+import 'package:cycle_ready/src/features/dashboard/presentation/coaching_source_card.dart';
 import 'package:cycle_ready/src/features/weather/application/today_weather_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cycle_ready/src/features/strength/application/strength_provider.dart';
 import 'package:cycle_ready/src/features/strength/domain/strength_training_load.dart';
+
+DailySession _cloudSession(DailyCoachingRecommendation recommendation) {
+  final workout = recommendation.workout;
+  if (workout == null) {
+    return DailySession(
+      date: recommendation.date,
+      type: SessionType.rest,
+      title: 'Rest day',
+      durationMinutes: 0,
+      targetLoad: 0,
+      reason: recommendation.explanation,
+      confidence: recommendation.confidence,
+      evidence: const [],
+    );
+  }
+  final normalizedFamily = workout.family.replaceAll('-', '_');
+  final type = switch (normalizedFamily) {
+    'rest' => SessionType.rest,
+    'recovery' => SessionType.recovery,
+    'endurance' => SessionType.endurance,
+    'tempo' || 'sweet_spot' => SessionType.tempo,
+    _ => SessionType.intervals,
+  };
+  return DailySession(
+    date: recommendation.date,
+    type: type,
+    title: workout.title,
+    durationMinutes: workout.durationMinutes,
+    targetLoad: workout.targetLoad,
+    reason: recommendation.explanation,
+    confidence: recommendation.confidence,
+    evidence: const [],
+  );
+}
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -44,8 +82,24 @@ class DashboardScreen extends ConsumerWidget {
       momentum: assessPerformanceMomentum(powerProgress),
     );
     final coaching = ref.watch(todayCoachingProvider);
+    final cloudCoaching = ref.watch(todayDailyCoachingRecommendationProvider);
     final rideWeather = ref.watch(todayRideWeatherProvider);
     final now = DateTime.now();
+    final latestRide = rides.isEmpty
+        ? null
+        : rides.reduce(
+            (first, second) =>
+                first.startedAt.isAfter(second.startedAt) ? first : second,
+          );
+    final latestRideFinishedAt = latestRide?.startedAt.add(
+      Duration(seconds: latestRide.durationSeconds),
+    );
+    final latestRideIsRecent = latestRideFinishedAt != null &&
+        !now.difference(latestRideFinishedAt).isNegative &&
+        now.difference(latestRideFinishedAt) <= const Duration(hours: 96);
+    final postRideFeedback = latestRideIsRecent
+        ? ref.watch(postRideFeedbackProvider(latestRide!.id)).valueOrNull
+        : null;
     final todayRides = rides
         .where(
           (ride) =>
@@ -62,23 +116,26 @@ class DashboardScreen extends ConsumerWidget {
         .toList();
     final plannedToday = ref.watch(todayPlannedSessionProvider).valueOrNull;
     final confirmed = plannedToday?.confirmed ?? false;
-    final displayedSession = plannedToday == null
-        ? coaching.today
-        : DailySession(
-            date: plannedToday.day,
-            type: SessionType.values.firstWhere(
-              (value) => value.name == plannedToday.sessionType,
-              orElse: () => SessionType.endurance,
-            ),
-            title: plannedToday.title,
-            durationMinutes: plannedToday.durationMinutes,
-            targetLoad: plannedToday.targetLoad,
-            reason: plannedToday.adaptationReason.isNotEmpty
-                ? plannedToday.adaptationReason
-                : plannedToday.prescription,
-            confidence: coaching.today.confidence,
-            evidence: coaching.today.evidence,
-          );
+    final cloudRecommendation = cloudCoaching.valueOrNull;
+    final displayedSession = cloudRecommendation != null
+        ? _cloudSession(cloudRecommendation)
+        : plannedToday == null
+            ? coaching.today
+            : DailySession(
+                date: plannedToday.day,
+                type: SessionType.values.firstWhere(
+                  (value) => value.name == plannedToday.sessionType,
+                  orElse: () => SessionType.endurance,
+                ),
+                title: plannedToday.title,
+                durationMinutes: plannedToday.durationMinutes,
+                targetLoad: plannedToday.targetLoad,
+                reason: plannedToday.adaptationReason.isNotEmpty
+                    ? plannedToday.adaptationReason
+                    : plannedToday.prescription,
+                confidence: coaching.today.confidence,
+                evidence: coaching.today.evidence,
+              );
     final sleepScore = readiness.factors
         .firstWhere((factor) => factor.label == 'Sleep')
         .score
@@ -111,6 +168,9 @@ class DashboardScreen extends ConsumerWidget {
       acuteFatigue: training.fatigue,
       perceivedFatigue: recovery.fatigue,
       soreness: recovery.soreness,
+      postRideEffort: postRideFeedback?.perceivedEffort,
+      postRideLegFatigue: postRideFeedback?.legFatigue,
+      postRideDiscomfort: postRideFeedback?.discomfort,
     );
     final suggestedWorkout = displayedSession.durationMinutes <= 0
         ? null
@@ -171,6 +231,14 @@ class DashboardScreen extends ConsumerWidget {
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 20),
+              CoachingSourceCard(
+                state: cloudCoaching.isLoading
+                    ? CoachingSourceState.checking
+                    : cloudRecommendation != null
+                        ? CoachingSourceState.authoritative
+                        : CoachingSourceState.offlineFallback,
+              ),
+              const SizedBox(height: 10),
               _DailyInsight(result: readiness, coaching: coaching),
               if (rideWeather.valueOrNull != null) ...[
                 const SizedBox(height: 10),

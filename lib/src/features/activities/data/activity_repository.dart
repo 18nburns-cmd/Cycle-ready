@@ -2,6 +2,7 @@ import 'package:cycle_ready/src/core/database/app_database.dart';
 import 'package:cycle_ready/src/core/database/database_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cycle_ready/src/features/activities/domain/training_metrics.dart';
+import 'package:cycle_ready/src/features/activities/domain/ride_duplicate_matcher.dart';
 import 'package:cycle_ready/src/features/strength/application/strength_provider.dart';
 
 final activityRepositoryProvider = Provider(
@@ -10,6 +11,14 @@ final activityRepositoryProvider = Provider(
 
 final activitiesProvider = StreamProvider<List<Activity>>(
   (ref) => ref.watch(activityRepositoryProvider).watchAll(),
+);
+
+final possibleDuplicateRidesProvider = Provider<List<PossibleDuplicateRide>>(
+  (ref) {
+    final rides =
+        ref.watch(activitiesProvider).valueOrNull ?? const <Activity>[];
+    return ref.watch(activityRepositoryProvider).possibleDuplicates(rides);
+  },
 );
 
 final athleteSettingsProvider = StreamProvider<AthleteSetting?>(
@@ -52,4 +61,16 @@ class ActivityRepository {
   Stream<List<Activity>> watchAll() => database.watchActivities();
   Future<Activity?> byId(String id) => database.activityById(id);
   Future<List<ActivitySample>> samplesFor(String id) => database.samplesFor(id);
+  Future<void> deleteAndPreventReimport(String id) =>
+      database.deleteActivityAndRemember(id);
+
+  List<PossibleDuplicateRide> possibleDuplicates(Iterable<Activity> rides) =>
+      findPossibleDuplicateRides(rides.map((ride) => RideDuplicateCandidate(
+            id: ride.id,
+            source: ride.source,
+            startedAt: ride.startedAt,
+            durationSeconds: ride.durationSeconds,
+            distanceMetres: ride.distanceMetres,
+            averagePower: ride.averagePower,
+          )));
 }

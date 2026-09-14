@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:cycle_ready/src/core/database/app_database.dart';
+import 'package:cycle_ready/src/features/readiness/domain/recovery_time.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -26,7 +27,62 @@ void main() {
     expect(athlete.ridingSafetyProfile, 'balanced');
     expect(rides.single.id, 'fixture-ride');
     expect(rides.single.averagePower, 211);
-    expect(await _userVersion(database), 20);
+    expect(await _userVersion(database), 24);
+  });
+
+  test('deleted activities are removed with dependants and stay excluded',
+      () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final startedAt = DateTime(2026, 9, 2, 8);
+    await database.saveActivity(
+      ActivitiesCompanion.insert(
+        id: 'intervals-123',
+        source: 'intervalsIcu',
+        externalId: const Value('123'),
+        startedAt: startedAt,
+        durationSeconds: 3600,
+        distanceMetres: 30000,
+      ),
+      [
+        ActivitySamplesCompanion.insert(
+          activityId: 'intervals-123',
+          elapsedSeconds: 0,
+        ),
+      ],
+    );
+    Future<RecoveryTimeEstimate> recoveryFromStoredRides() async {
+      final rides = await database.getActivities();
+      return calculateRecoveryTime(
+        sessions: rides.map((ride) => (
+              finishedAt: ride.startedAt.add(
+                Duration(seconds: ride.durationSeconds),
+              ),
+              load: ride.trainingLoad?.toDouble() ?? 70,
+            )),
+        now: startedAt.add(const Duration(hours: 1)),
+        readiness: 75,
+        sleepScore: 85,
+        form: 0,
+        acuteFatigue: 40,
+        perceivedFatigue: 2,
+        soreness: 2,
+      );
+    }
+
+    expect((await recoveryFromStoredRides()).remainingHours, greaterThan(0));
+    await database.deleteActivityAndRemember('intervals-123');
+    expect(await database.activityById('intervals-123'), isNull);
+    expect(await database.samplesFor('intervals-123'), isEmpty);
+    expect(
+      await database.hasDeletedActivityMatch(
+        externalId: '123',
+        startedAt: startedAt,
+        durationSeconds: 3600,
+      ),
+      isTrue,
+    );
+    expect((await recoveryFromStoredRides()).remainingHours, 0);
   });
 
   test('schema 19 fixture preserves location and adds weather safety default',
@@ -41,7 +97,7 @@ void main() {
     expect(athlete.trainingLocation, 'NE1 1AA');
     expect(athlete.ridingSafetyProfile, 'balanced');
     expect((await database.getActivities()).single.title, 'Fixture tempo');
-    expect(await _userVersion(database), 20);
+    expect(await _userVersion(database), 24);
   });
 }
 
@@ -77,6 +133,9 @@ Future<File> _createFixture({required int version}) async {
 
   final raw = sqlite.sqlite3.open(file.path);
   try {
+    if (version < 23) {
+      raw.execute('DROP TABLE pending_cloud_mutations');
+    }
     if (version < 20) {
       raw.execute(
         'ALTER TABLE athlete_settings DROP COLUMN riding_safety_profile',

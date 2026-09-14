@@ -1,9 +1,34 @@
+import 'dart:math' as math;
+
 import 'package:cycle_ready/src/features/coaching/domain/daily_coaching.dart';
 import 'package:cycle_ready/src/features/coaching/domain/event_periodisation.dart';
 import 'package:cycle_ready/src/features/coaching/domain/training_availability.dart';
 import 'package:cycle_ready/src/features/coaching/domain/workout_library.dart';
 
 enum TrainingGoal { generalFitness, ftp, endurance, event }
+
+class RecoveryDayLimitEvidence {
+  const RecoveryDayLimitEvidence({
+    this.consecutiveReadinessBelow45Days = 0,
+    this.consecutiveHrvBelowBaselineDays = 0,
+    this.consecutiveElevatedRestingHrDays = 0,
+    this.illnessOrInjury = false,
+    this.previousRecoveryCostScore,
+  });
+
+  final int consecutiveReadinessBelow45Days;
+  final int consecutiveHrvBelowBaselineDays;
+  final int consecutiveElevatedRestingHrDays;
+  final bool illnessOrInjury;
+  final double? previousRecoveryCostScore;
+
+  bool get permitsExtendedRecovery =>
+      consecutiveReadinessBelow45Days >= 2 ||
+      consecutiveHrvBelowBaselineDays >= 3 ||
+      consecutiveElevatedRestingHrDays >= 3 ||
+      illnessOrInjury ||
+      (previousRecoveryCostScore ?? 0) > 80;
+}
 
 class AdaptiveWorkout {
   const AdaptiveWorkout({
@@ -50,15 +75,24 @@ class AdaptivePlanGenerator {
     int? eventLongRideMinutes,
     int horizonDays = 28,
     List<CyclingAvailability> availability = const [],
+    RecoveryDayLimitEvidence recoveryLimitEvidence =
+        const RecoveryDayLimitEvidence(),
   }) {
     final count = daysPerWeek.clamp(2, 6);
     final enabledSlots = availability.where((slot) => slot.enabled).toList();
     final available = enabledSlots.isEmpty
         ? _trainingDays(count, longRideWeekday)
         : enabledSlots.map((slot) => slot.weekday).toSet();
+    // A partial or rebuilding seven-day history is not a viable ceiling for a
+    // complete future week. Without a floor, one short ride can turn nearly
+    // every later session into recovery work despite good readiness.
+    final rebuildingFloor = math.min(300.0, math.max(200.0, count * 70.0));
     var loadCeiling = currentWeeklyLoad <= 0
         ? 300.0
-        : currentWeeklyLoad * (readiness < 50 ? .9 : 1.05);
+        : math.max(
+            rebuildingFloor,
+            currentWeeklyLoad * (readiness < 50 ? .9 : 1.05),
+          );
     if (form < -15 || rampRate > 8) loadCeiling *= .85;
     final result = <AdaptiveWorkout>[];
     var weeklyLoad = 0;
@@ -67,6 +101,8 @@ class AdaptivePlanGenerator {
     for (var offset = 0; offset < horizonDays; offset++) {
       final day = DateTime(start.year, start.month, start.day + offset);
       final weekIndex = offset ~/ 7;
+      final isRecoveryWeek =
+          weekIndex >= 2 && (readiness < 55 || form < -10 || rampRate > 8);
       if (weekIndex != activeWeek) {
         activeWeek = weekIndex;
         weeklyLoad = 0;
@@ -75,6 +111,12 @@ class AdaptivePlanGenerator {
       final slot =
           enabledSlots.where((item) => item.weekday == day.weekday).firstOrNull;
       final isLong = day.weekday == longRideWeekday;
+      final usesFourDayCoachPattern = available.containsAll(const <int>{
+        DateTime.monday,
+        DateTime.wednesday,
+        DateTime.saturday,
+        DateTime.sunday,
+      });
       final sequence = result.where(
           (item) => item.day.isAfter(day.subtract(const Duration(days: 7))));
       final hardRecently = sequence.any((item) =>
@@ -88,13 +130,19 @@ class AdaptivePlanGenerator {
         ftp: ftp,
         isLong: isLong,
         hardRecently: hardRecently,
-        recoveryWeek: weekIndex == 3,
+        recoveryWeek: isRecoveryWeek,
         readiness: readiness,
         form: form,
         rampRate: rampRate,
         eventPhase: phase,
         eventLongRideMinutes: eventLongRideMinutes,
         forceRecovery: recoveryDays.any((value) => _sameDay(value, day)),
+        forceEasyAerobic:
+            usesFourDayCoachPattern && day.weekday == DateTime.monday,
+        forceQuality: usesFourDayCoachPattern &&
+            (day.weekday == DateTime.wednesday ||
+                day.weekday == DateTime.saturday),
+        applyCurrentRecoverySignals: result.length < 2,
         avoidHard: avoidHardDays.any((value) => _sameDay(value, day)) ||
             (missedSessions >= 2 && result.isEmpty),
       );
@@ -119,6 +167,7 @@ class AdaptivePlanGenerator {
           hardRecently: hardRecently,
           isLong: isLong,
           weekIndex: weekIndex,
+          plannedRecoveryWeek: isRecoveryWeek,
         ),
       );
       final fitted = _withDisplayTitle(
@@ -129,20 +178,26 @@ class AdaptivePlanGenerator {
             0 => .92,
             1 => 1.0,
             2 => 1.06,
-            _ => .65,
+            _ => isRecoveryWeek ? .65 : 1.0,
           };
-      if (weeklyLoad + fitted.targetLoad > weeklyCeiling && result.isNotEmpty) {
-        result.add(_withDisplayTitle(_fitToAvailability(
-          _recovery(day, ftp,
-              reason:
-                  'Your rolling load is already near this week\'s safe ceiling.'),
-          slot,
-        )));
-        weeklyLoad += 15;
-      } else {
-        result.add(fitted);
-        weeklyLoad += fitted.targetLoad;
-      }
+      final loadAdjusted =
+          weeklyLoad + fitted.targetLoad > weeklyCeiling && result.isNotEmpty
+              ? _withDisplayTitle(_fitToAvailability(
+                  _recovery(day, ftp,
+                      reason:
+                          'Your rolling load is already near this week\'s safe ceiling.'),
+                  slot,
+                ))
+              : fitted;
+      final limited = _applyRecoveryDayLimit(
+        loadAdjusted,
+        previous: result,
+        ftp: ftp,
+        plannedRecoveryWeek: isRecoveryWeek,
+        evidence: recoveryLimitEvidence,
+      );
+      result.add(limited);
+      weeklyLoad += limited.targetLoad;
     }
     return result;
   }
@@ -161,6 +216,7 @@ class AdaptivePlanGenerator {
       return workout;
     }
     final phase = switch (eventPhase) {
+      EventPhase.foundation => WorkoutLibraryPhase.foundation,
       EventPhase.base => WorkoutLibraryPhase.foundation,
       EventPhase.build => WorkoutLibraryPhase.build,
       EventPhase.specific => WorkoutLibraryPhase.specific,
@@ -275,6 +331,7 @@ class AdaptivePlanGenerator {
     required bool hardRecently,
     required bool isLong,
     required int weekIndex,
+    required bool plannedRecoveryWeek,
   }) {
     final goalText = switch (goal) {
       TrainingGoal.ftp => 'raise your sustainable power and FTP',
@@ -310,8 +367,9 @@ class AdaptivePlanGenerator {
       0 => 'foundation week, establishing repeatable work before load rises',
       1 => 'build week, adding a measured progression from the opening week',
       2 => 'highest-load week, providing the strongest stimulus of this block',
-      _ =>
-        'recovery week, reducing load so the previous three weeks can be absorbed',
+      _ => plannedRecoveryWeek
+          ? 'recovery week, reducing load so the previous training can be absorbed'
+          : 'consolidation week, maintaining productive work while monitoring recovery evidence',
     };
     final phaseText = phase == null
         ? 'This is week ${weekIndex + 1} of the current four-week block: the $blockStage. It contributes directly to the goal to $goalText.'
@@ -368,7 +426,7 @@ class AdaptivePlanGenerator {
   }
 
   Set<int> _trainingDays(int count, int longDay) {
-    const preferred = [2, 4, 6, 7, 3, 5];
+    const preferred = [1, 3, 6, 7, 2, 4, 5];
     final days = <int>{longDay};
     for (final day in preferred) {
       if (days.length >= count) break;
@@ -390,6 +448,9 @@ class AdaptivePlanGenerator {
     required EventPhase? eventPhase,
     required int? eventLongRideMinutes,
     required bool forceRecovery,
+    required bool forceEasyAerobic,
+    required bool forceQuality,
+    required bool applyCurrentRecoverySignals,
     required bool avoidHard,
   }) {
     if (forceRecovery) {
@@ -399,7 +460,9 @@ class AdaptivePlanGenerator {
         reason: 'post-ride feedback has protected this recovery day',
       );
     }
-    if (recoveryWeek || readiness < 40 || form < -25 || rampRate > 10) {
+    if (recoveryWeek ||
+        (applyCurrentRecoverySignals &&
+            (readiness < 40 || form < -25 || rampRate > 10))) {
       return _recovery(day, ftp, reason: 'recovery signals reduced intensity');
     }
     if (eventPhase == EventPhase.taper || eventPhase == EventPhase.eventWeek) {
@@ -433,6 +496,46 @@ class AdaptivePlanGenerator {
         targetLoad: 32,
         prescription:
             '${(ftp * .58).round()}â€“${(ftp * .68).round()} W Â· intensity reduced after recent training or missed sessions',
+      );
+    }
+    if (forceEasyAerobic) {
+      return AdaptiveWorkout(
+        day: day,
+        type: SessionType.endurance,
+        title: 'Easy aerobic reset',
+        durationMinutes: 45,
+        targetLoad: 28,
+        prescription:
+            '${(ftp * .56).round()}–${(ftp * .64).round()} W · relaxed Zone 2 after the weekend',
+      );
+    }
+    if (forceQuality && !isLong) {
+      final isSecondary = day.weekday == DateTime.saturday;
+      if (eventPhase == EventPhase.foundation) {
+        return AdaptiveWorkout(
+          day: day,
+          type: SessionType.tempo,
+          title: isSecondary
+              ? 'Foundation tempo · controlled support'
+              : 'Foundation tempo · aerobic quality',
+          durationMinutes: isSecondary ? 60 : 70,
+          targetLoad: isSecondary ? 52 : 60,
+          prescription: isSecondary
+              ? 'Controlled tempo intervals; finish with enough reserve for Sunday endurance'
+              : 'Sustained tempo intervals that build aerobic and muscular endurance without threshold-level cost',
+        );
+      }
+      return AdaptiveWorkout(
+        day: day,
+        type: SessionType.intervals,
+        title: isSecondary
+            ? 'Secondary quality · controlled intervals'
+            : 'Primary quality · key intervals',
+        durationMinutes: isSecondary ? 60 : 70,
+        targetLoad: isSecondary ? 62 : 75,
+        prescription: isSecondary
+            ? 'Keep the final repetition controlled so Sunday endurance remains achievable'
+            : 'Complete the key work with consistent power and full recoveries',
       );
     }
     if (isLong) {
@@ -504,6 +607,37 @@ class AdaptivePlanGenerator {
         prescription: 'Below ${(ftp * .55).round()} W · '
             '${reason ?? 'keep this genuinely easy'}',
       );
+
+  AdaptiveWorkout _applyRecoveryDayLimit(
+    AdaptiveWorkout workout, {
+    required List<AdaptiveWorkout> previous,
+    required int ftp,
+    required bool plannedRecoveryWeek,
+    required RecoveryDayLimitEvidence evidence,
+  }) {
+    if (workout.type != SessionType.recovery ||
+        plannedRecoveryWeek ||
+        evidence.permitsExtendedRecovery) {
+      return workout;
+    }
+    final consecutiveRecoverySessions = previous.reversed
+        .takeWhile((item) => item.type == SessionType.recovery)
+        .length;
+    if (consecutiveRecoverySessions < 2) return workout;
+    return AdaptiveWorkout(
+      day: workout.day,
+      type: SessionType.endurance,
+      title: 'Easy aerobic reset',
+      durationMinutes: 40,
+      targetLoad: 22,
+      prescription:
+          '${(ftp * .56).round()}–${(ftp * .64).round()} W · relaxed Zone 2',
+      reason:
+          'Two recovery sessions are already scheduled consecutively. With no persistent recovery-risk exception, a short easy aerobic session preserves rhythm without adding meaningful intensity.',
+      setting: workout.setting,
+      startMinutes: workout.startMinutes,
+    );
+  }
 
   bool _sameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;

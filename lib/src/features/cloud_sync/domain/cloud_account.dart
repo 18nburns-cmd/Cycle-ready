@@ -12,5 +12,11 @@ abstract interface class CloudAuthRepository {
 
   Future<void> signUp({required String email, required String password});
 
+  Future<void> requestPasswordReset({required String email});
+
+  Future<void> updatePassword({required String password});
+
+  Future<void> deleteAccount();
+
   Future<void> signOut();
 }

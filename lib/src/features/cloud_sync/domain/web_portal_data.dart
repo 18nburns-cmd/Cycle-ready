@@ -1,4 +1,5 @@
 import 'package:cycle_ready/src/features/cloud_sync/domain/cloud_snapshot.dart';
+import 'package:cycle_ready/src/features/cloud_sync/domain/relational_coaching_data.dart';
 
 class WebPortalData {
   WebPortalData({
@@ -46,6 +47,91 @@ class WebPortalData {
             ? const <String, Object?>{}
             : _rows(snapshot.payload, 'athleteSettings').first,
         updatedAt: snapshot.updatedAt,
+      );
+
+  factory WebPortalData.fromRelational(RelationalCoachingData data) =>
+      WebPortalData(
+        activities: data.activities
+            .map((row) => WebActivity.fromJson({
+                  'id': row['id'],
+                  'title': _sourceTitle(row['source_payload']) ??
+                      row['sport'] ??
+                      'Cycling activity',
+                  'startedAt': row['started_at'],
+                  'durationSeconds': row['duration_seconds'],
+                  'distanceMetres': row['distance_metres'],
+                  'elevationMetres': row['elevation_metres'],
+                  'averagePower': row['average_power'],
+                  'normalisedPower': row['normalized_power'],
+                  'averageHeartRate': row['average_hr'],
+                  'averageCadence': row['average_cadence'],
+                  'trainingLoad': row['training_load'],
+                }))
+            .toList(growable: false),
+        recovery: data.wellness
+            .map((row) => WebRecoveryDay.fromJson({
+                  'day': row['recorded_date'],
+                  'sleepMinutes': row['sleep_minutes'],
+                  'sleepQuality': row['sleep_quality'],
+                  'restingHeartRate': row['resting_hr'],
+                  'hrvMilliseconds': row['hrv_ms'],
+                  'fatigue': row['fatigue'],
+                  'soreness': row['soreness'],
+                  'stress': row['stress'],
+                  'motivation': row['motivation'],
+                }))
+            .toList(growable: false),
+        body: data.weights
+            .map((row) => WebBodyMeasurement.fromJson({
+                  'measuredAt': row['measured_at'],
+                  'weightKg': row['weight_kg'],
+                }))
+            .toList(growable: false),
+        planned: data.plannedSessions
+            .map((row) => WebPlannedSession.fromJson({
+                  'day': row['scheduled_date'],
+                  'title': row['purpose'] ?? row['session_type'],
+                  'sessionType': row['session_type'],
+                  'durationMinutes': row['planned_duration_minutes'],
+                  'targetLoad': row['planned_load'],
+                  'prescription': row['primary_adaptation'],
+                  'adaptationReason': row['adaptation_status'],
+                }))
+            .toList(growable: false),
+        nutrition: data.nutritionEntries
+            .map((row) => WebNutritionEntry.fromJson({
+                  'recordedAt': row['recorded_at'],
+                  'label': row['label'],
+                  'calories': row['calories'],
+                  'carbohydrateGrams': row['carbohydrate_grams'],
+                  'proteinGrams': row['protein_grams'],
+                  'fatGrams': row['fat_grams'],
+                  'waterMillilitres': row['water_millilitres'],
+                }))
+            .toList(growable: false),
+        nutritionTargets: data.nutritionTargets
+            .map((row) => WebNutritionTarget.fromJson({
+                  'day': row['target_date'],
+                  'calories': row['calories'],
+                  'carbohydrateGrams': row['carbohydrate_grams'],
+                  'proteinGrams': row['protein_grams'],
+                  'fatGrams': row['fat_grams'],
+                  'waterMillilitres': row['water_millilitres'],
+                }))
+            .toList(growable: false),
+        ftpHistory: data.ftpHistory
+            .map((row) => WebFtpEstimate.fromJson({
+                  'estimatedAt': row['effective_date'],
+                  'watts': row['ftp'],
+                  'confidence': row['confidence'],
+                }))
+            .toList(growable: false),
+        athlete: {
+          'ftp': data.athlete['current_ftp'],
+          'maximumHeartRate': data.athlete['maximum_hr'],
+          'weightKg': data.athlete['body_mass_kg'],
+        },
+        updatedAt: data.updatedAt,
       );
 
   final List<WebActivity> activities;
@@ -317,3 +403,9 @@ DateTime _date(Object? value) =>
     value is DateTime ? value : DateTime.tryParse('$value') ?? DateTime(1970);
 bool _sameDay(DateTime a, DateTime b) =>
     a.year == b.year && a.month == b.month && a.day == b.day;
+
+String? _sourceTitle(Object? value) {
+  if (value is! Map) return null;
+  final title = value['name'] ?? value['title'];
+  return title == null || '$title'.trim().isEmpty ? null : '$title';
+}

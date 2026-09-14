@@ -11,6 +11,13 @@ void main() {
     expect(eventPhaseFor(DateTime(2026, 10, 22), event), EventPhase.eventWeek);
   });
 
+  test('event eleven months away is Foundation rather than Build', () {
+    expect(
+      eventPhaseFor(DateTime(2026, 9, 12), DateTime(2027, 8, 12)),
+      EventPhase.foundation,
+    );
+  });
+
   test('periodisation blocks cover every day through the event', () {
     final now = DateTime(2026, 7, 1);
     final event = DateTime(2026, 10, 24);

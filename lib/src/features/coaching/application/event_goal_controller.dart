@@ -4,9 +4,15 @@ import 'package:cycle_ready/src/features/coaching/data/planned_session_repositor
 import 'package:cycle_ready/src/features/coaching/domain/adaptive_plan.dart';
 import 'package:cycle_ready/src/features/coaching/domain/coaching_event_goal.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cycle_ready/src/features/cloud_sync/application/cloud_auth_provider.dart';
+import 'package:cycle_ready/src/features/cloud_sync/application/cloud_sync_controller.dart';
 
 final eventGoalProvider = StreamProvider<CoachingEventGoal?>(
   (ref) => ref.watch(eventGoalRepositoryProvider).watchGoal(),
+);
+
+final eventGoalsProvider = StreamProvider<List<CoachingEventGoal>>(
+  (ref) => ref.watch(eventGoalRepositoryProvider).watchGoals(),
 );
 
 final eventGoalControllerProvider = Provider(EventGoalController.new);
@@ -16,6 +22,7 @@ class EventGoalController {
   final Ref ref;
 
   Future<void> save({
+    int? id,
     required String name,
     required DateTime eventDate,
     required double distanceKm,
@@ -28,6 +35,7 @@ class EventGoalController {
   }) async {
     await ref.read(eventGoalRepositoryProvider).saveGoal(
           CoachingEventGoal(
+            id: id,
             name: name.trim(),
             eventDate: DateTime(eventDate.year, eventDate.month, eventDate.day),
             distanceKm: distanceKm,
@@ -46,7 +54,17 @@ class EventGoalController {
           daysPerWeek: availableDays,
           longRideWeekday: current.longRideWeekday,
         );
+    await _syncIfSignedIn();
   }
 
-  Future<void> delete() => ref.read(eventGoalRepositoryProvider).deleteGoal();
+  Future<void> delete(int id) async {
+    await ref.read(eventGoalRepositoryProvider).deleteGoal(id);
+    await _syncIfSignedIn();
+  }
+
+  Future<void> _syncIfSignedIn() async {
+    if (await ref.read(cloudAccountProvider.future) != null) {
+      await ref.read(cloudSyncControllerProvider.notifier).upload();
+    }
+  }
 }

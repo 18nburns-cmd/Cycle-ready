@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cycle_ready/src/features/activities/application/activity_import_controller.dart';
 import 'package:cycle_ready/src/features/intervals/application/intervals_wellness_controller.dart';
+import 'package:cycle_ready/src/features/intervals/data/intervals_oauth_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class IntervalsConnectionCard extends ConsumerStatefulWidget {
   const IntervalsConnectionCard({super.key});
@@ -17,6 +19,7 @@ class _IntervalsConnectionCardState
   final apiKey = TextEditingController();
   bool loading = true;
   bool connected = false;
+  bool cloudConnected = false;
   String? message;
 
   @override
@@ -28,11 +31,60 @@ class _IntervalsConnectionCardState
   Future<void> _load() async {
     final credentials =
         await ref.read(intervalsIcuServiceProvider).credentials();
+    final oauth = ref.read(intervalsOAuthServiceProvider);
+    var hasCloudConnection = false;
+    try {
+      hasCloudConnection = await oauth?.isConnected() ?? false;
+    } catch (_) {
+      // The optional local API-key connection remains usable while cloud is
+      // unavailable.
+    }
     if (!mounted) return;
     setState(() {
       if (credentials != null) athlete.text = credentials.athleteId;
       connected = credentials != null;
+      cloudConnected = hasCloudConnection;
       loading = false;
+    });
+  }
+
+  Future<void> _connectCloud() async {
+    final oauth = ref.read(intervalsOAuthServiceProvider);
+    if (oauth == null) {
+      setState(() => message = 'CycleReady Cloud is not configured.');
+      return;
+    }
+    setState(() {
+      loading = true;
+      message = null;
+    });
+    try {
+      final authorizationUrl = await oauth.beginAuthorization();
+      final opened = await launchUrl(
+        authorizationUrl,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!opened) throw StateError('Could not open Intervals.icu.');
+      if (mounted) {
+        setState(() => message =
+            'Finish approving CycleReady in Intervals.icu, then return here.');
+      }
+    } catch (error) {
+      if (mounted) setState(() => message = '$error');
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
+  }
+
+  Future<void> _refreshCloudConnection() async {
+    final value =
+        await ref.read(intervalsOAuthServiceProvider)?.isConnected() ?? false;
+    if (!mounted) return;
+    setState(() {
+      cloudConnected = value;
+      message = value
+          ? 'Secure cloud connection confirmed.'
+          : 'Cloud authorization has not completed yet.';
     });
   }
 
@@ -135,6 +187,30 @@ class _IntervalsConnectionCardState
             Chip(label: Text(connected ? 'Connected' : 'Not connected')),
           ]),
           const SizedBox(height: 14),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading:
+                Icon(cloudConnected ? Icons.cloud_done : Icons.cloud_outlined),
+            title: Text(cloudConnected
+                ? 'Cloud synchronization connected'
+                : 'Connect secure cloud synchronization'),
+            subtitle: const Text(
+              'Recommended. Uses provider OAuth without storing an API key on this phone.',
+            ),
+            trailing: cloudConnected
+                ? IconButton(
+                    tooltip: 'Refresh cloud connection',
+                    onPressed: loading ? null : _refreshCloudConnection,
+                    icon: const Icon(Icons.refresh),
+                  )
+                : FilledButton.tonal(
+                    onPressed: loading ? null : _connectCloud,
+                    child: const Text('Connect securely'),
+                  ),
+          ),
+          const Divider(),
+          const Text('Optional on-phone connection'),
+          const SizedBox(height: 10),
           TextField(
             controller: athlete,
             enabled: !loading,

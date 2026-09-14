@@ -120,20 +120,48 @@ class CoachReminderService {
     if (!allowed) return;
     await _notifications.show(
       id: 3000 + (activityId.hashCode & 0x0FFFFFFF),
-      title: 'Recovery fuel after $rideTitle',
-      body: body,
+      title: 'How did $rideTitle go?',
+      body:
+          'Answer the short ride check-in so recovery and tomorrow can adapt. $body',
       notificationDetails: const NotificationDetails(
         android: AndroidNotificationDetails(
           'post_ride_recovery',
           'Post-ride recovery',
           channelDescription:
-              'Nutrition and hydration guidance after completed training',
+              'Post-ride check-in, nutrition and hydration guidance',
           importance: Importance.high,
           priority: Priority.high,
           category: AndroidNotificationCategory.recommendation,
         ),
       ),
-      payload: '/nutrition',
+      payload: '/activities/$activityId/debrief',
+    );
+  }
+
+  Future<void> showCloudNotification({
+    required String id,
+    required String title,
+    required String body,
+    required String route,
+  }) async {
+    final allowed = await requestPermission();
+    if (!allowed) return;
+    await _notifications.show(
+      id: 4000 + (id.hashCode & 0x0FFFFFFF),
+      title: title,
+      body: body,
+      notificationDetails: const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'adaptive_coaching',
+          'Adaptive coaching',
+          channelDescription:
+              'Workout, recovery and connected-service coaching updates',
+          importance: Importance.high,
+          priority: Priority.high,
+          category: AndroidNotificationCategory.recommendation,
+        ),
+      ),
+      payload: route,
     );
   }
 

@@ -1,12 +1,48 @@
 import 'package:cycle_ready/src/features/activities/domain/training_metrics.dart';
 import 'package:cycle_ready/src/features/activities/domain/power_development_focus.dart';
 import 'package:cycle_ready/src/features/coaching/domain/daily_coaching.dart';
+import 'package:cycle_ready/src/features/coaching/domain/adaptive_training_policy.dart';
+import 'package:cycle_ready/src/features/coaching/domain/training_recommendation_engine.dart';
 import 'package:cycle_ready/src/features/readiness/domain/readiness_calculator.dart';
 import 'package:cycle_ready/src/features/readiness/domain/recovery_input.dart';
 import 'package:cycle_ready/src/features/readiness/domain/readiness_result.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('canonical coach and decision engines remain directly usable', () {
+    const coach = CoachEngine();
+    const decision = DecisionEngine();
+
+    expect(coach, isA<CoachEngine>());
+    expect(
+      decision.recommend(
+        readiness: 20,
+        form: -30,
+        hardSessions7Days: 0,
+        recoveryHours: 0,
+      ),
+      TrainingRecommendation.rest,
+    );
+    expect(
+      decision
+          .evaluatePolicy(AdaptiveTrainingPolicyInput(
+            plannedWorkout: const PolicyWorkout(
+              id: 'easy',
+              title: 'Easy endurance',
+              intensity: PolicyWorkoutIntensity.endurance,
+              durationMinutes: 45,
+              targetLoad: 25,
+            ),
+            readiness: 75,
+            fatigueRisk: 20,
+            trainingProgress: 60,
+            goalAlignment: 80,
+          ))
+          .decision,
+      PolicyDecision.keep,
+    );
+  });
+
   const engine = DailyCoachingEngine();
   const calculator = ReadinessCalculator();
   final now = DateTime(2026, 7, 27);

@@ -52,6 +52,11 @@ class _PlannedWorkoutDetailScreenState
       appBar: AppBar(
         actions: [
           IconButton(
+            tooltip: 'Delete from training plan',
+            onPressed: _deleteWorkout,
+            icon: const Icon(Icons.delete_outline),
+          ),
+          IconButton(
             tooltip: 'Send workouts to Intervals/Garmin',
             onPressed: _sendWorkout,
             icon: const Icon(Icons.ios_share_outlined),
@@ -82,13 +87,23 @@ class _PlannedWorkoutDetailScreenState
           SafeArea(
             top: false,
             minimum: const EdgeInsets.fromLTRB(16, 8, 16, 14),
-            child: SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: _sendWorkout,
-                icon: const Icon(Icons.watch_outlined),
-                label: const Text('Send workout to Intervals / Garmin'),
-              ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: _sendWorkout,
+                    icon: const Icon(Icons.watch_outlined),
+                    label: const Text('Send workout to Intervals / Garmin'),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: _deleteWorkout,
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('Delete from training plan'),
+                ),
+              ],
             ),
           ),
         ],
@@ -113,6 +128,41 @@ class _PlannedWorkoutDetailScreenState
         SnackBar(content: Text('Workout could not be sent: $error')),
       );
     }
+  }
+
+  Future<void> _deleteWorkout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete workout?'),
+        content: Text(
+          '${widget.session.title} will be removed from CycleReady and from '
+          'the connected future workout calendar. Completed activities will '
+          'not be affected.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await ref.read(plannedSessionControllerProvider).delete(widget.session.day);
+    try {
+      await ref
+          .read(plannedSessionControllerProvider)
+          .publishUpcomingToIntervals();
+    } catch (_) {
+      // The local delete is authoritative and the normal sync will retry the
+      // provider reconciliation when connectivity returns.
+    }
+    if (mounted) Navigator.pop(context);
   }
 }
 

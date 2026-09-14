@@ -83,23 +83,22 @@ class SupabaseCloudSnapshotRepository
           .eq('activity_id', activityId);
       return;
     }
-    await client.from('activity_sample_chunks').upsert(
-          chunks
-              .map((chunk) => {
-                    'user_id': _userId,
-                    'activity_id': activityId,
-                    'chunk_index': chunk.index,
-                    'sample_count': chunk.samples.length,
-                    'first_elapsed_seconds': chunk.firstElapsedSeconds,
-                    'last_elapsed_seconds': chunk.lastElapsedSeconds,
-                    'content_hash': chunk.contentHash,
-                    'payload':
-                        chunk.samples.map((sample) => sample.toJson()).toList(),
-                    'updated_at': DateTime.now().toUtc().toIso8601String(),
-                  })
-              .toList(),
-          onConflict: 'user_id,activity_id,chunk_index',
-        );
+    // Keep each HTTP request bounded to one chunk. Sending every chunk for a
+    // long ride in one PostgREST request defeats the chunking boundary and can
+    // cause Android's TLS connection to fail before Supabase receives it.
+    for (final chunk in chunks) {
+      await client.from('activity_sample_chunks').upsert({
+        'user_id': _userId,
+        'activity_id': activityId,
+        'chunk_index': chunk.index,
+        'sample_count': chunk.samples.length,
+        'first_elapsed_seconds': chunk.firstElapsedSeconds,
+        'last_elapsed_seconds': chunk.lastElapsedSeconds,
+        'content_hash': chunk.contentHash,
+        'payload': chunk.samples.map((sample) => sample.toJson()).toList(),
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }, onConflict: 'user_id,activity_id,chunk_index');
+    }
     await client
         .from('activity_sample_chunks')
         .delete()

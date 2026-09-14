@@ -22,6 +22,11 @@ class NutritionScreen extends ConsumerWidget {
             style: TextStyle(fontWeight: FontWeight.w700)),
         actions: [
           IconButton(
+            tooltip: 'Search or scan food',
+            onPressed: () => context.push('/nutrition/catalogue'),
+            icon: const Icon(Icons.qr_code_scanner),
+          ),
+          IconButton(
             tooltip: 'Food & Drink Library',
             onPressed: () => context.push('/nutrition/library'),
             icon: const Icon(Icons.bookmarks_outlined),
@@ -52,6 +57,23 @@ class NutritionScreen extends ConsumerWidget {
               context,
               ref,
               focus: _IntakeFocus.calories,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: ListTile(
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              leading: const CircleAvatar(child: Icon(Icons.search)),
+              title: const Text(
+                'Search food & drink database',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              subtitle: const Text(
+                'Choose an item with nutrition already filled in, then adjust the serving.',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.push('/nutrition/catalogue'),
             ),
           ),
           const SizedBox(height: 12),

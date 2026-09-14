@@ -12,6 +12,7 @@ import 'package:cycle_ready/src/core/database/app_database.dart';
 import 'package:cycle_ready/src/features/nutrition/presentation/nutrition_screen.dart';
 import 'package:cycle_ready/src/features/nutrition/presentation/nutrition_label_scanner_screen.dart';
 import 'package:cycle_ready/src/features/nutrition/presentation/saved_foods_screen.dart';
+import 'package:cycle_ready/src/features/nutrition/presentation/food_catalogue_screen.dart';
 import 'package:cycle_ready/src/features/body/presentation/body_metrics_screen.dart';
 import 'package:cycle_ready/src/features/splash/presentation/splash_screen.dart';
 import 'package:cycle_ready/src/features/privacy/presentation/data_privacy_screen.dart';
@@ -137,6 +138,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/nutrition/library',
         name: 'saved-foods',
         builder: (context, state) => const SavedFoodsScreen(),
+      ),
+      GoRoute(
+        path: '/nutrition/catalogue',
+        name: 'food-catalogue',
+        builder: (context, state) => const FoodCatalogueScreen(),
       ),
       GoRoute(
         path: '/strength',

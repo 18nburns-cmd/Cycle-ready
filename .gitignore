@@ -12,3 +12,8 @@ config/cloud_defines.ci.json
 .idea/
 *.iml
 focustag/
+# Local Firebase application configuration contains project identifiers and
+# must be provisioned separately on each trusted build machine.
+android/app/google-services.json
+android/key.properties
+android/app/cycleready-release.jks

@@ -7,8 +7,8 @@ import 'package:cycle_ready/src/features/readiness/domain/recovery_input.dart';
 
 enum SessionType { rest, recovery, endurance, tempo, intervals }
 
-class DailySession {
-  const DailySession({
+class WorkoutRecommendation {
+  const WorkoutRecommendation({
     required this.date,
     required this.type,
     required this.title,
@@ -36,13 +36,13 @@ class CoachingResult {
     required this.insights,
   });
 
-  final DailySession today;
-  final List<DailySession> outlook;
+  final WorkoutRecommendation today;
+  final List<WorkoutRecommendation> outlook;
   final List<String> insights;
 }
 
-class DailyCoachingEngine {
-  const DailyCoachingEngine();
+class CoachEngine {
+  const CoachEngine();
 
   CoachingResult build({
     required DateTime now,
@@ -73,7 +73,7 @@ class DailyCoachingEngine {
       confidence: confidence,
       evidence: evidence,
     );
-    final outlook = <DailySession>[];
+    final outlook = <WorkoutRecommendation>[];
     var fitness = metrics.fitness;
     var fatigue = metrics.fatigue;
     var priorLoad = today.targetLoad.toDouble();
@@ -109,7 +109,7 @@ class DailyCoachingEngine {
     );
   }
 
-  DailySession _sessionFor({
+  WorkoutRecommendation _sessionFor({
     required DateTime date,
     required int score,
     required double form,
@@ -126,7 +126,7 @@ class DailyCoachingEngine {
         form < -25 ||
         rampRate > 8;
     if (score < 34 || safetyFlag) {
-      return DailySession(
+      return WorkoutRecommendation(
         date: date,
         type: SessionType.rest,
         title: 'Rest or gentle mobility',
@@ -140,7 +140,7 @@ class DailyCoachingEngine {
       );
     }
     if (score < 50 || form < -15) {
-      return DailySession(
+      return WorkoutRecommendation(
         date: date,
         type: SessionType.recovery,
         title: 'Easy recovery spin',
@@ -152,7 +152,7 @@ class DailyCoachingEngine {
       );
     }
     if (score < 67 || form < -5 || !alternateHardDay) {
-      return DailySession(
+      return WorkoutRecommendation(
         date: date,
         type: SessionType.endurance,
         title: 'Endurance ride',
@@ -164,7 +164,7 @@ class DailyCoachingEngine {
       );
     }
     if (score < 80) {
-      return DailySession(
+      return WorkoutRecommendation(
         date: date,
         type: SessionType.tempo,
         title: 'Tempo intervals',
@@ -183,14 +183,14 @@ class DailyCoachingEngine {
     );
   }
 
-  DailySession _developmentSession(
+  WorkoutRecommendation _developmentSession(
     DateTime date,
     PowerDevelopmentFocus? focus, {
     required double confidence,
     required List<String> evidence,
   }) {
     if (focus == null) {
-      return DailySession(
+      return WorkoutRecommendation(
         date: date,
         type: SessionType.intervals,
         title: 'Threshold development · 4 × 8 min',
@@ -229,7 +229,7 @@ class DailyCoachingEngine {
           load: 72,
         ),
     };
-    return DailySession(
+    return WorkoutRecommendation(
       date: date,
       type: focus.area == PowerDevelopmentArea.endurance
           ? SessionType.tempo
@@ -308,3 +308,6 @@ class DailyCoachingEngine {
     return insights;
   }
 }
+
+typedef DailySession = WorkoutRecommendation;
+typedef DailyCoachingEngine = CoachEngine;

@@ -3,6 +3,8 @@ import 'package:cycle_ready/src/core/formatting/units.dart';
 import 'package:cycle_ready/src/features/activities/data/activity_repository.dart';
 import 'package:cycle_ready/src/features/athlete/application/athlete_profile_controller.dart';
 import 'package:cycle_ready/src/features/coaching/application/planned_session_controller.dart';
+import 'package:cycle_ready/src/features/coaching/application/workout_browser_controller.dart';
+import 'package:cycle_ready/src/features/coaching/application/workout_delivery_status_provider.dart';
 import 'package:cycle_ready/src/features/coaching/data/planned_session_repository.dart';
 import 'package:cycle_ready/src/features/coaching/domain/daily_coaching.dart';
 import 'package:cycle_ready/src/features/strength/application/strength_provider.dart';
@@ -13,7 +15,14 @@ import 'package:cycle_ready/src/features/coaching/domain/adaptive_plan.dart';
 import 'package:cycle_ready/src/features/coaching/domain/training_availability.dart';
 import 'package:cycle_ready/src/features/coaching/domain/structured_workout.dart';
 import 'package:cycle_ready/src/features/coaching/domain/planned_workout_outcome.dart';
+import 'package:cycle_ready/src/features/coaching/domain/unplanned_workout_choices.dart';
+import 'package:cycle_ready/src/features/coaching/domain/workout_catalogue.dart';
+import 'package:cycle_ready/src/features/coaching/domain/workout_delivery_reconciliation.dart';
+import 'package:cycle_ready/src/features/coaching/domain/workout_delivery_state.dart';
+import 'package:cycle_ready/src/features/coaching/presentation/workout_delivery_status_banner.dart';
 import 'package:cycle_ready/src/features/coaching/presentation/workout_profile_chart.dart';
+import 'package:cycle_ready/src/features/coaching/presentation/workout_browser_filters.dart';
+import 'package:cycle_ready/src/features/readiness/application/readiness_provider.dart';
 import 'package:go_router/go_router.dart';
 
 class TrainingPlanScreen extends ConsumerStatefulWidget {
@@ -44,6 +53,10 @@ class _TrainingPlanScreenState extends ConsumerState<TrainingPlanScreen> {
   Widget build(BuildContext context) {
     final storedSessions =
         ref.watch(plannedSessionsProvider(range)).valueOrNull ?? const [];
+    final deliveryEntries =
+        ref.watch(workoutDeliveryStatusesProvider(range)).valueOrNull ??
+            const <CalendarWorkoutDeliveryState>[];
+    final reconciliations = ref.watch(workoutReconciliationProvider);
     final rides =
         ref.watch(activitiesProvider).valueOrNull ?? const <Activity>[];
     final strengthSessions = ref.watch(strengthSessionsProvider).valueOrNull ??
@@ -77,6 +90,16 @@ class _TrainingPlanScreenState extends ConsumerState<TrainingPlanScreen> {
     final byDay = {
       for (final session in storedSessions) session.day.day: session
     };
+    final deliveryByDay = {
+      for (final entry in deliveryEntries) entry.day.day: entry.delivery.status,
+    };
+    final deliveryEntryByDay = {
+      for (final entry in deliveryEntries) entry.day.day: entry.delivery,
+    };
+    final reconciliationByDay = {
+      for (final session in storedSessions)
+        session.day.day: reconciliations[_workoutExternalId(session.day)],
+    };
     final selected =
         selectedDay.month == month.month ? byDay[selectedDay.day] : null;
     final completed = selectedDay.month == month.month
@@ -101,6 +124,11 @@ class _TrainingPlanScreenState extends ConsumerState<TrainingPlanScreen> {
             icon: const Icon(Icons.flag_outlined),
           ),
           IconButton(
+            tooltip: 'Retry future workout sync',
+            onPressed: _retryFutureWorkoutDelivery,
+            icon: const Icon(Icons.sync_problem_outlined),
+          ),
+          IconButton(
             tooltip: 'Send workouts to Intervals/Garmin',
             onPressed: _publishToGarmin,
             icon: const Icon(Icons.watch_outlined),
@@ -117,7 +145,7 @@ class _TrainingPlanScreenState extends ConsumerState<TrainingPlanScreen> {
               selected != null
           ? null
           : FloatingActionButton.extended(
-              onPressed: () => _editSession(null),
+              onPressed: () => _showWorkoutChoices(storedSessions, rides),
               icon: const Icon(Icons.add),
               label: const Text('Add workout'),
             ),
@@ -142,6 +170,17 @@ class _TrainingPlanScreenState extends ConsumerState<TrainingPlanScreen> {
               ...strengthByDay.keys,
             },
             strengthDays: strengthByDay.keys.toSet(),
+            attentionDays: {
+              for (final entry in deliveryByDay.entries)
+                if (entry.value == WorkoutDeliveryStatus.failed ||
+                    entry.value == WorkoutDeliveryStatus.externallyDiverged)
+                  entry.key,
+              for (final entry in reconciliationByDay.entries)
+                if (entry.value == WorkoutReconciliationStatus.missing ||
+                    entry.value ==
+                        WorkoutReconciliationStatus.externallyDiverged)
+                  entry.key,
+            },
             onSelected: (day) => _openCalendarDay(
               day,
               byDay[day.day],
@@ -163,7 +202,11 @@ class _TrainingPlanScreenState extends ConsumerState<TrainingPlanScreen> {
           const SizedBox(height: 10),
           if (completed.isNotEmpty || completedStrength.isNotEmpty) ...[
             if (completed.isNotEmpty)
-              _CompletedDayCard(rides: completed, planned: selected),
+              _CompletedDayCard(
+                rides: completed,
+                planned: selected,
+                onDelete: _confirmDeleteActivity,
+              ),
             ...completedStrength.map(
               (session) => _CompletedStrengthCard(
                 session: session,
@@ -171,10 +214,20 @@ class _TrainingPlanScreenState extends ConsumerState<TrainingPlanScreen> {
               ),
             ),
           ] else if (selected == null)
-            _EmptyDay(onAdd: () => _editSession(null))
+            _EmptyDay(
+              onChoose: () => _showWorkoutChoices(storedSessions, rides),
+              onCustom: () => _editSession(null),
+            )
           else
             _PlannedDayCard(
               session: selected,
+              deliveryStatus: deliveryByDay[selected.day.day],
+              reconciliationStatus: reconciliationByDay[selected.day.day],
+              onRetry: deliveryEntryByDay[selected.day.day]?.canRetry == true
+                  ? () => _retryWorkoutDelivery(
+                        deliveryEntryByDay[selected.day.day]!,
+                      )
+                  : null,
               onDelete: () => _confirmDeleteSession(selected),
             ),
         ],
@@ -279,6 +332,180 @@ class _TrainingPlanScreenState extends ConsumerState<TrainingPlanScreen> {
           type: type,
           durationMinutes: type == SessionType.rest ? 0 : duration,
           targetLoad: type == SessionType.rest ? 0 : load,
+        );
+  }
+
+  Future<void> _showWorkoutChoices(
+    List<PlannedSession> sessions,
+    List<Activity> rides,
+  ) async {
+    final readiness = ref.read(todayReadinessProvider).score;
+    final athlete = ref.read(athleteSettingsProvider).valueOrNull;
+    final metrics = ref.read(fitnessMetricsProvider);
+    final goal = ref.read(trainingPreferencesProvider).valueOrNull?.goal;
+    final availability =
+        await ref.read(plannedSessionControllerProvider).getAvailability();
+    final slot = availability
+        .where((item) => item.weekday == selectedDay.weekday)
+        .firstOrNull;
+    if (!mounted) return;
+    final cutoff = selectedDay.subtract(const Duration(hours: 48));
+    final spacingEnd = selectedDay.add(const Duration(hours: 48));
+    final hardPlannedNearby = sessions.any((session) =>
+        !_sameDay(session.day, selectedDay) &&
+        !session.day.isBefore(cutoff) &&
+        !session.day.isAfter(spacingEnd) &&
+        (session.sessionType == SessionType.tempo.name ||
+            session.sessionType == SessionType.intervals.name));
+    final hardRideRecently = rides.any((ride) =>
+        ride.startedAt.isBefore(selectedDay.add(const Duration(days: 1))) &&
+        !ride.startedAt.isBefore(cutoff) &&
+        (ride.trainingLoad ?? 0) >= 60);
+    final evaluations = const UnplannedWorkoutSelectionService().evaluate(
+      readiness: readiness,
+      ftp: athlete?.ftp ?? 200,
+      form: metrics.form,
+      rampRate: metrics.rampRate,
+      hardSessionWithin48Hours: hardPlannedNearby || hardRideRecently,
+      weeklyIntent: switch (goal) {
+        'ftp' => AdaptationTarget.thresholdPower,
+        'endurance' => AdaptationTarget.aerobicDurability,
+        'event' => AdaptationTarget.raceSpecificity,
+        _ => AdaptationTarget.aerobicEfficiency,
+      },
+      availableMinutes: slot?.durationMinutes,
+      rideSetting: slot?.setting ?? RideSetting.flexible,
+      hasIndoorTrainer: athlete?.hasIndoorTrainer ?? false,
+    );
+    final eligible =
+        evaluations.where((candidate) => candidate.isEligible).toList()
+          ..sort((a, b) {
+            final score = b.suitabilityScore.compareTo(a.suitabilityScore);
+            return score != 0 ? score : a.family.compareTo(b.family);
+          });
+    final recommended = eligible.firstOrNull;
+    final browser = WorkoutBrowserController(evaluations);
+    List<UnplannedWorkoutChoice> displayedChoices() =>
+        browser.state.visibleCandidates.toList()
+          ..sort((a, b) {
+            final group = _adaptationGroup(a.family).compareTo(
+              _adaptationGroup(b.family),
+            );
+            if (group != 0) return group;
+            return b.suitabilityScore.compareTo(a.suitabilityScore);
+          });
+    final choice = await showModalBottomSheet<UnplannedWorkoutChoice>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) => SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(18, 0, 18, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Choose a workout',
+                  style: Theme.of(sheetContext)
+                      .textTheme
+                      .headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Options for ${_fullDate(selectedDay)} based on readiness $readiness, current load and recent hard sessions.',
+                ),
+                const SizedBox(height: 14),
+                WorkoutBrowserFilters(
+                  state: browser.state,
+                  onFamilyChanged: (family) => setSheetState(
+                    () => browser.filterByFamily(family),
+                  ),
+                  onDurationChanged: (duration) => setSheetState(
+                    () => browser.filterByDuration(duration),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                for (final option in displayedChoices())
+                  Card(
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.all(14),
+                      leading: CircleAvatar(
+                        backgroundColor: _typeColor(option.type.name),
+                        child: const Icon(Icons.directions_bike,
+                            color: Colors.black),
+                      ),
+                      title: Row(
+                        children: [
+                          Expanded(
+                            child: Text(option.title,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700)),
+                          ),
+                          if (identical(option, recommended))
+                            const Chip(label: Text('Best fit')),
+                        ],
+                      ),
+                      subtitle: Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _adaptationGroup(option.family),
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            Text(
+                              '${option.family} · Load ${option.targetLoad} · Confidence ${(option.confidence * 100).round()}%\n${option.prescription}\n${option.reason}',
+                            ),
+                            if (identical(option, recommended))
+                              Text(
+                                  _recommendationExplanation(option, eligible)),
+                            if (!option.isEligible)
+                              Text(
+                                'Unavailable: ${option.rejectionReasons.join(' ')}',
+                                style: TextStyle(
+                                  color:
+                                      Theme.of(sheetContext).colorScheme.error,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      isThreeLine: true,
+                      enabled: option.isEligible,
+                      onTap: option.isEligible
+                          ? () => Navigator.pop(
+                                sheetContext,
+                                browser.select(option),
+                              )
+                          : null,
+                    ),
+                  ),
+                const SizedBox(height: 6),
+                TextButton.icon(
+                  onPressed: () {
+                    Navigator.pop(sheetContext);
+                    Future.microtask(() {
+                      if (mounted) _editSession(null);
+                    });
+                  },
+                  icon: const Icon(Icons.tune),
+                  label: const Text('Create a custom workout instead'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (choice == null || !mounted) return;
+    await ref.read(plannedSessionControllerProvider).saveUnplannedChoice(
+          day: selectedDay,
+          choice: choice,
         );
   }
 
@@ -670,6 +897,42 @@ class _TrainingPlanScreenState extends ConsumerState<TrainingPlanScreen> {
     );
   }
 
+  Future<void> _confirmDeleteActivity(Activity activity) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete completed activity?'),
+        content: Text(
+          '${activity.title} will be removed from CycleReady, including its '
+          'samples, feedback and coach analysis. The original activity in '
+          'Health Connect or Intervals.icu will not be deleted, but CycleReady '
+          'will remember your choice and will not import it again.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Delete activity'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await ref
+        .read(activityRepositoryProvider)
+        .deleteAndPreventReimport(activity.id);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${activity.title} removed from CycleReady.')),
+    );
+  }
+
   Future<void> _confirmDeleteSession(PlannedSession session) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -696,6 +959,14 @@ class _TrainingPlanScreenState extends ConsumerState<TrainingPlanScreen> {
     );
     if (confirmed != true || !mounted) return;
     await ref.read(plannedSessionControllerProvider).delete(session.day);
+    try {
+      await ref
+          .read(plannedSessionControllerProvider)
+          .publishUpcomingToIntervals();
+    } catch (_) {
+      // Keep the offline-first delete. The sync coordinator retries provider
+      // reconciliation when connectivity returns.
+    }
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('${session.title} removed from the calendar.')),
@@ -727,7 +998,7 @@ class _TrainingPlanScreenState extends ConsumerState<TrainingPlanScreen> {
                       ?.copyWith(fontWeight: FontWeight.w700)),
               const SizedBox(height: 8),
               const Text(
-                'CycleReady will create a four-week block from your FTP, readiness, rolling load, completed rides, gym sessions and post-ride feedback. Three progressive weeks lead into a deliberate recovery week. Missed workouts, sore legs, discomfort and excess fatigue automatically reduce upcoming intensity.',
+                'CycleReady will create a four-week block from your target event, current phase, FTP, readiness, rolling load, completed rides, gym sessions and post-ride feedback. Recovery weeks are added only when accumulated training and recovery evidence supports them. Missed workouts, sore legs, discomfort and excess fatigue automatically reduce upcoming intensity.',
               ),
               const SizedBox(height: 18),
               DropdownButtonFormField<TrainingGoal>(
@@ -1032,6 +1303,30 @@ class _TrainingPlanScreenState extends ConsumerState<TrainingPlanScreen> {
     }
   }
 
+  Future<void> _retryWorkoutDelivery(WorkoutDeliveryState delivery) async {
+    final retried = await ref
+        .read(workoutDeliveryRetryControllerProvider)
+        .retry(delivery.plannedSessionId, range);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(retried
+          ? 'Workout queued to retry safely.'
+          : 'This workout is not currently eligible for retry.'),
+    ));
+  }
+
+  Future<void> _retryFutureWorkoutDelivery() async {
+    final count = await ref
+        .read(workoutDeliveryRetryControllerProvider)
+        .retryFuture(range);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(count == 0
+          ? 'No failed future workouts need retrying.'
+          : '$count future workout${count == 1 ? '' : 's'} queued to retry.'),
+    ));
+  }
+
   static (int, int) _defaults(SessionType type) => switch (type) {
         SessionType.rest => (0, 0),
         SessionType.recovery => (30, 15),
@@ -1224,6 +1519,7 @@ class _CalendarGrid extends StatelessWidget {
     required this.sessions,
     required this.completedDays,
     required this.strengthDays,
+    required this.attentionDays,
     required this.onSelected,
     required this.onLongPressEntry,
   });
@@ -1232,6 +1528,7 @@ class _CalendarGrid extends StatelessWidget {
   final Map<int, PlannedSession> sessions;
   final Set<int> completedDays;
   final Set<int> strengthDays;
+  final Set<int> attentionDays;
   final ValueChanged<DateTime> onSelected;
   final ValueChanged<DateTime> onLongPressEntry;
 
@@ -1302,6 +1599,14 @@ class _CalendarGrid extends StatelessWidget {
                               : _typeColor(session!.sessionType),
                         ),
                       ),
+                    if (attentionDays.contains(dayNumber)) ...[
+                      const SizedBox(height: 2),
+                      Icon(
+                        Icons.sync_problem,
+                        size: 11,
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ],
                   ]),
             ),
           );
@@ -1312,26 +1617,49 @@ class _CalendarGrid extends StatelessWidget {
 }
 
 class _EmptyDay extends StatelessWidget {
-  const _EmptyDay({required this.onAdd});
-  final VoidCallback onAdd;
+  const _EmptyDay({required this.onChoose, required this.onCustom});
+  final VoidCallback onChoose;
+  final VoidCallback onCustom;
 
   @override
   Widget build(BuildContext context) => Card(
-        child: ListTile(
-          contentPadding: const EdgeInsets.all(16),
-          leading: const CircleAvatar(child: Icon(Icons.add)),
-          title: const Text('No workout planned'),
-          subtitle: const Text('Add a ride or make this a recovery day.'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: onAdd,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: CircleAvatar(child: Icon(Icons.add)),
+                title: Text('No workout planned'),
+                subtitle: Text(
+                  'Pick from structured options matched to today’s readiness and training load.',
+                ),
+              ),
+              FilledButton.icon(
+                onPressed: onChoose,
+                icon: const Icon(Icons.route_outlined),
+                label: const Text('Choose a structured workout'),
+              ),
+              TextButton(
+                onPressed: onCustom,
+                child: const Text('Create a custom workout'),
+              ),
+            ],
+          ),
         ),
       );
 }
 
 class _CompletedDayCard extends StatelessWidget {
-  const _CompletedDayCard({required this.rides, this.planned});
+  const _CompletedDayCard({
+    required this.rides,
+    required this.onDelete,
+    this.planned,
+  });
   final List<Activity> rides;
   final PlannedSession? planned;
+  final ValueChanged<Activity> onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -1397,7 +1725,12 @@ class _CompletedDayCard extends StatelessWidget {
               subtitle: Text(_rideSummary(ride)),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => context.push('/activities/${ride.id}'),
+              onLongPress: () => onDelete(ride),
             ),
+          ),
+          Text(
+            'Press and hold a completed activity to delete it.',
+            style: Theme.of(context).textTheme.bodySmall,
           ),
           if (planned != null) ...[
             const Divider(),
@@ -1596,15 +1929,26 @@ class _PlannedDayCard extends StatelessWidget {
   const _PlannedDayCard({
     required this.session,
     required this.onDelete,
+    this.deliveryStatus,
+    this.reconciliationStatus,
+    this.onRetry,
   });
   final PlannedSession session;
   final VoidCallback onDelete;
+  final WorkoutDeliveryStatus? deliveryStatus;
+  final WorkoutReconciliationStatus? reconciliationStatus;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) => Card(
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(children: [
+            WorkoutDeliveryStatusBanner(
+              deliveryStatus: deliveryStatus,
+              reconciliationStatus: reconciliationStatus,
+              onRetry: onRetry,
+            ),
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: CircleAvatar(
@@ -1726,8 +2070,41 @@ Color _typeColor(String type) => switch (type) {
       _ => const Color(0xFF72D7C1),
     };
 
+String _adaptationGroup(String family) => switch (family) {
+      'Recovery' => 'Recovery adaptation',
+      'Endurance' || 'Durability' => 'Aerobic adaptation',
+      'Tempo' ||
+      'Sweet spot' ||
+      'Climbing strength' =>
+        'Muscular endurance adaptation',
+      'Threshold' => 'Threshold adaptation',
+      'VO2 max' => 'Maximal aerobic adaptation',
+      'Anaerobic' || 'Sprint' => 'High-intensity adaptation',
+      _ => 'General cycling adaptation',
+    };
+
+String _recommendationExplanation(
+  UnplannedWorkoutChoice recommended,
+  List<UnplannedWorkoutChoice> eligible,
+) {
+  if (eligible.length < 2) {
+    return 'Best fit because it is the highest-scoring safe option.';
+  }
+  final runnerUp = eligible[1];
+  final margin = (recommended.suitabilityScore - runnerUp.suitabilityScore)
+      .clamp(0, 100)
+      .toStringAsFixed(0);
+  final strongest = recommended.scoreComponents.entries.toList()
+    ..sort((a, b) => b.value.compareTo(a.value));
+  return 'Best fit by $margin points over ${runnerUp.family}; strongest evidence: ${strongest.first.key}.';
+}
+
 bool _sameDay(DateTime a, DateTime b) =>
     a.year == b.year && a.month == b.month && a.day == b.day;
+
+String _workoutExternalId(DateTime day) =>
+    'cycleready-${day.year}-${day.month.toString().padLeft(2, '0')}-'
+    '${day.day.toString().padLeft(2, '0')}';
 
 const _months = [
   'January',

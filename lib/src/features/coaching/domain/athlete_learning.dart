@@ -36,6 +36,69 @@ class WorkoutResponseSnapshot {
   }
 }
 
+class LearnedWorkoutAdjustment {
+  const LearnedWorkoutAdjustment({
+    required this.loadMultiplier,
+    required this.durationMultiplier,
+    required this.reason,
+    required this.confidence,
+  });
+
+  final double loadMultiplier;
+  final double durationMultiplier;
+  final String reason;
+  final double confidence;
+}
+
+LearnedWorkoutAdjustment personaliseWorkout(
+  WorkoutResponseSnapshot response,
+) {
+  final confidence = (response.sampleCount / 8).clamp(0.25, 1.0);
+  if (response.sampleCount < 3) {
+    return LearnedWorkoutAdjustment(
+      loadMultiplier: 1,
+      durationMultiplier: 1,
+      reason: 'The athlete-specific baseline is still forming.',
+      confidence: confidence,
+    );
+  }
+  if (response.completionRate < .7 ||
+      response.averageLoadRatio < .75 ||
+      response.averageDurationRatio < .75) {
+    return LearnedWorkoutAdjustment(
+      loadMultiplier: .9,
+      durationMultiplier: .9,
+      reason:
+          'Recent completion and delivered-load history support a more achievable dose.',
+      confidence: confidence,
+    );
+  }
+  if (response.averageLoadRatio > 1.2 || response.averageLegFatigue >= 4) {
+    return LearnedWorkoutAdjustment(
+      loadMultiplier: .9,
+      durationMultiplier: 1,
+      reason:
+          'This workout type has created more load or leg fatigue than planned.',
+      confidence: confidence,
+    );
+  }
+  if (response.completionRate >= .9 && response.averageLegFatigue <= 2.5) {
+    return LearnedWorkoutAdjustment(
+      loadMultiplier: 1.05,
+      durationMultiplier: 1.05,
+      reason:
+          'Consistent completion with controlled fatigue supports a small progression.',
+      confidence: confidence,
+    );
+  }
+  return LearnedWorkoutAdjustment(
+    loadMultiplier: 1,
+    durationMultiplier: 1,
+    reason: 'The current dose matches the athlete’s historical response.',
+    confidence: confidence,
+  );
+}
+
 WorkoutResponseSnapshot updateWorkoutResponse({
   required WorkoutResponseSnapshot previous,
   required WorkoutCompliance compliance,

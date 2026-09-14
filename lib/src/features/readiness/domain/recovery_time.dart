@@ -31,6 +31,9 @@ RecoveryTimeEstimate calculateRecoveryTime({
   required double acuteFatigue,
   required int perceivedFatigue,
   required int soreness,
+  int? postRideEffort,
+  int? postRideLegFatigue,
+  int? postRideDiscomfort,
 }) {
   final activeDemands = <double>[];
   var highestLoad = 0.0;
@@ -86,6 +89,16 @@ RecoveryTimeEstimate calculateRecoveryTime({
   if (perceivedFatigue >= 4 || soreness >= 4) {
     modifier += .1;
     drivers.add('check-in');
+  }
+  if ((postRideDiscomfort ?? 0) >= 7) {
+    modifier += .25;
+    drivers.add('post-ride discomfort');
+  } else if ((postRideLegFatigue ?? 0) >= 8 || (postRideEffort ?? 0) >= 9) {
+    modifier += .15;
+    drivers.add('post-ride feedback');
+  } else if ((postRideLegFatigue ?? 0) >= 6 || (postRideEffort ?? 0) >= 7) {
+    modifier += .08;
+    drivers.add('post-ride feedback');
   }
 
   final remainingHours = (hours * modifier).ceil().clamp(0, 96);

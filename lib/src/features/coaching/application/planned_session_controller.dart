@@ -13,6 +13,7 @@ import 'package:cycle_ready/src/features/intervals/data/intervals_icu_service.da
 import 'package:cycle_ready/src/features/intervals/data/intervals_workout_delivery.dart';
 import 'package:cycle_ready/src/features/coaching/domain/structured_workout.dart';
 import 'package:cycle_ready/src/features/coaching/domain/workout_delivery.dart';
+import 'package:cycle_ready/src/features/coaching/domain/workout_delivery_reconciliation.dart';
 import 'package:cycle_ready/src/features/strength/application/strength_provider.dart';
 import 'package:cycle_ready/src/features/coaching/domain/training_availability.dart';
 import 'package:cycle_ready/src/features/coaching/data/planned_session_repository.dart';
@@ -21,6 +22,9 @@ import 'package:cycle_ready/src/features/athlete/application/athlete_profile_con
 import 'package:cycle_ready/src/features/weather/data/cached_weather_repository.dart';
 import 'package:cycle_ready/src/features/weather/domain/weather_workout_adjustment.dart';
 import 'package:cycle_ready/src/features/weather/domain/ride_weather.dart';
+import 'package:cycle_ready/src/features/coaching/domain/unplanned_workout_choices.dart';
+import 'package:cycle_ready/src/features/cloud_sync/application/cloud_auth_provider.dart';
+import 'package:cycle_ready/src/features/cloud_sync/application/cloud_sync_controller.dart';
 
 final todayPlannedSessionProvider = StreamProvider<PlannedSession?>(
   (ref) => ref.watch(plannedSessionRepositoryProvider).watchDay(DateTime.now()),
@@ -29,6 +33,8 @@ final todayPlannedSessionProvider = StreamProvider<PlannedSession?>(
 final plannedSessionControllerProvider = Provider(PlannedSessionController.new);
 final workoutDeliveryProvider = Provider<WorkoutDeliveryProvider>((ref) =>
     IntervalsWorkoutDeliveryProvider(ref.watch(intervalsIcuServiceProvider)));
+final workoutReconciliationProvider =
+    StateProvider<Map<String, WorkoutReconciliationStatus>>((ref) => const {});
 final trainingPreferencesProvider = StreamProvider<TrainingPreference?>(
   (ref) => ref.watch(plannedSessionRepositoryProvider).watchPreferences(),
 );
@@ -115,6 +121,24 @@ class PlannedSessionController {
     );
   }
 
+  Future<void> saveUnplannedChoice({
+    required DateTime day,
+    required UnplannedWorkoutChoice choice,
+  }) =>
+      _sessions.save(
+        PlannedSessionWrite(
+          day: DateTime(day.year, day.month, day.day),
+          sessionType: choice.type.name,
+          title: choice.title,
+          durationMinutes: choice.durationMinutes,
+          targetLoad: choice.targetLoad,
+          confirmed: true,
+          prescription: choice.prescription,
+          adaptationReason: choice.reason,
+          origin: 'athlete_choice',
+        ),
+      );
+
   Future<void> savePreferences({
     required TrainingGoal goal,
     required int daysPerWeek,
@@ -170,6 +194,7 @@ class PlannedSessionController {
       availability,
       hasIndoorTrainer: athlete.hasIndoorTrainer,
     );
+    final events = await ref.read(eventGoalRepositoryProvider).getGoals();
     final event = await ref.read(eventGoalRepositoryProvider).getGoal();
     final rides =
         ref.read(activitiesProvider).valueOrNull ?? const <Activity>[];
@@ -198,6 +223,13 @@ class PlannedSessionController {
           (workout) => _sameDay(workout.startedAt, today) && workout.load >= 35,
         );
     final avoidHardDays = <DateTime>{if (demandingToday) start};
+    for (final goalEvent in events) {
+      if (!goalEvent.eventDate.isBefore(start) &&
+          goalEvent.eventDate.isBefore(start.add(const Duration(days: 28)))) {
+        avoidHardDays
+            .add(goalEvent.eventDate.subtract(const Duration(days: 1)));
+      }
+    }
     final recoveryDays = <DateTime>{};
     for (final ride in rides.where(
       (ride) => ride.startedAt.isAfter(today.subtract(const Duration(days: 3))),
@@ -272,6 +304,32 @@ class PlannedSessionController {
         // A forecast outage must never prevent the offline-first plan building.
       }
     }
+    for (final goalEvent in events.where((candidate) =>
+        !candidate.eventDate.isBefore(start) &&
+        candidate.eventDate.isBefore(start.add(const Duration(days: 28))))) {
+      plan.removeWhere((workout) => _sameDay(workout.day, goalEvent.eventDate));
+      final estimatedMinutes = (goalEvent.distanceKm /
+              (goalEvent.terrain == 'mountainous'
+                  ? 20
+                  : goalEvent.terrain == 'flat'
+                      ? 28
+                      : 24) *
+              60)
+          .round();
+      plan.add(AdaptiveWorkout(
+        day: goalEvent.eventDate,
+        type: SessionType.intervals,
+        title: '${goalEvent.priority} event · ${goalEvent.name}',
+        durationMinutes: estimatedMinutes.clamp(30, 720),
+        targetLoad: (estimatedMinutes * .8).round().clamp(30, 300),
+        prescription:
+            'Event day · execute the rehearsed pacing and fuelling plan',
+        reason:
+            '${goalEvent.priority}-priority event retained in the multi-event calendar. Training before and after it is adapted without moving the event.',
+        startMinutes: athlete.preferredRideTimeMinutes,
+      ));
+    }
+    plan.sort((left, right) => left.day.compareTo(right.day));
     final planEnd = start.add(const Duration(days: 28));
     final existingFuture = await _sessions.getRange(start, planEnd);
     final protectedDays = existingFuture
@@ -328,6 +386,10 @@ class PlannedSessionController {
         ),
       );
       saved++;
+    }
+    final account = await ref.read(cloudAccountProvider.future);
+    if (account != null) {
+      await ref.read(cloudSyncControllerProvider.notifier).upload();
     }
     return saved;
   }
@@ -402,23 +464,26 @@ class PlannedSessionController {
         : '$base · $structure';
   }
 
-  Future<int> publishUpcomingToIntervals() async {
+  Future<int> publishUpcomingToIntervals({bool force = true}) async {
     final now = DateTime.now();
     final start = DateTime(now.year, now.month, now.day);
     final end = start.add(const Duration(days: 14));
     final sessions = await _sessions.getRange(start, end);
     final rides =
         ref.read(activitiesProvider).valueOrNull ?? const <Activity>[];
+    bool completedOn(DateTime day) => rides.any((ride) =>
+        ride.startedAt.year == day.year &&
+        ride.startedAt.month == day.month &&
+        ride.startedAt.day == day.day);
+    String externalId(DateTime day) =>
+        'cycleready-${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
     final workouts = sessions
         .where((session) =>
             session.sessionType != SessionType.rest.name &&
             session.durationMinutes > 0 &&
-            !rides.any((ride) =>
-                ride.startedAt.year == session.day.year &&
-                ride.startedAt.month == session.day.month &&
-                ride.startedAt.day == session.day.day))
+            !completedOn(session.day))
         .map((session) => buildStructuredWorkout(
-              id: 'cycleready-${session.day.year}-${session.day.month.toString().padLeft(2, '0')}-${session.day.day.toString().padLeft(2, '0')}',
+              id: externalId(session.day),
               day: session.day,
               sessionType: session.sessionType,
               title: session.title,
@@ -426,7 +491,22 @@ class PlannedSessionController {
               targetLoad: session.targetLoad,
             ))
         .toList();
-    final result = await ref.read(workoutDeliveryProvider).deliver(workouts);
+    final provider = ref.read(workoutDeliveryProvider);
+    final result = provider is ReconcilingWorkoutDeliveryProvider
+        ? await provider.reconcile(
+            workouts,
+            ownedExternalIds: [
+              for (var day = start;
+                  !day.isAfter(end);
+                  day = day.add(const Duration(days: 1)))
+                if (!completedOn(day)) externalId(day),
+            ],
+            force: force,
+          )
+        : await provider.deliver(workouts);
+    ref.read(workoutReconciliationProvider.notifier).state = {
+      for (final item in result.reconciliation) item.externalId: item.status,
+    };
     return result.delivered;
   }
 

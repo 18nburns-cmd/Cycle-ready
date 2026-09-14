@@ -8,6 +8,7 @@ import 'package:cycle_ready/src/features/intervals/data/intervals_icu_service.da
 import 'package:cycle_ready/src/features/coaching/application/morning_plan_adapter.dart';
 import 'package:cycle_ready/src/features/coaching/application/plan_completion_adapter.dart';
 import 'package:cycle_ready/src/features/coaching/application/planned_session_controller.dart';
+import 'package:cycle_ready/src/features/offline_sync/application/offline_mutation_sync_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -160,8 +161,29 @@ class AppSyncController extends AsyncNotifier<AppSyncState> {
       if (changed || completionChanged || extended) {
         successes.add('training plan');
       }
+      final intervals = ref.read(intervalsIcuServiceProvider);
+      if (await intervals.credentials() != null) {
+        final published = await ref
+            .read(plannedSessionControllerProvider)
+            .publishUpcomingToIntervals(force: false);
+        if (published > 0) successes.add('training calendar');
+      }
     } catch (_) {
       failures.add('training plan');
+    }
+
+    try {
+      final mutationSync = ref.read(offlineMutationSyncServiceProvider);
+      if (mutationSync != null) {
+        final result = await mutationSync.flush();
+        if (result.applied > 0) successes.add('offline changes');
+        if (result.retries > 0) failures.add('offline changes');
+        if (result.conflicts > 0) {
+          failures.add('conflicted offline changes');
+        }
+      }
+    } catch (_) {
+      failures.add('offline changes');
     }
 
     final finished = DateTime.now();

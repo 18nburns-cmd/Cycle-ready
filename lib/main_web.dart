@@ -6,6 +6,8 @@ import 'package:cycle_ready/src/features/cloud_sync/application/cloud_snapshot_p
 import 'package:cycle_ready/src/features/cloud_sync/domain/web_dashboard_summary.dart';
 import 'package:cycle_ready/src/features/cloud_sync/domain/web_portal_data.dart';
 import 'package:cycle_ready/src/features/cloud_sync/presentation/web_ride_detail_dialog.dart';
+import 'package:cycle_ready/src/features/cloud_sync/presentation/web_today_coaching_card.dart';
+import 'package:cycle_ready/src/features/coaching/application/daily_coaching_status_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 Future<void> main() async {
@@ -290,62 +292,68 @@ class _TodayDetails extends ConsumerWidget {
   const _TodayDetails();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => ref
-      .watch(webPortalDataProvider)
-      .when(
-        loading: () => const SizedBox.shrink(),
-        error: (error, stack) => const SizedBox.shrink(),
-        data: (data) {
-          if (data == null) return const SizedBox.shrink();
-          final latest = data.recovery.isEmpty ? null : data.recovery.first;
-          final week = data.activitiesSince(const Duration(days: 7));
-          final todayNutrition = data.nutritionFor(DateTime.now());
-          final upcoming = data.planned
-              .where((session) => !session.day.isBefore(DateTime.now()))
-              .toList();
-          return Column(
-            children: [
-              _MetricWrap(metrics: [
-                (
-                  'Latest sleep',
-                  latest?.sleepMinutes == null
-                      ? '—'
-                      : '${(latest!.sleepMinutes! / 60).toStringAsFixed(1)} h'
-                ),
-                (
-                  'Resting HR',
-                  latest?.restingHeartRate == null
-                      ? '—'
-                      : '${latest!.restingHeartRate!.toStringAsFixed(0)} bpm'
-                ),
-                (
-                  '7-day load',
-                  week
-                      .fold<double>(0, (sum, ride) => sum + ride.trainingLoad)
-                      .toStringAsFixed(0)
-                ),
-                ('Today’s calories', '${todayNutrition.calories} kcal'),
-                ('Today’s water', '${todayNutrition.waterMillilitres} ml'),
-              ]),
-              if (upcoming.isNotEmpty) ...[
-                const SizedBox(height: 18),
-                _SectionCard(
-                  title: 'Next planned session',
-                  child: ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading:
-                        const CircleAvatar(child: Icon(Icons.directions_bike)),
-                    title: Text(upcoming.first.title,
-                        style: const TextStyle(fontWeight: FontWeight.w800)),
-                    subtitle: Text(
-                        '${_longDate(upcoming.first.day)} • ${upcoming.first.durationMinutes} min • ${upcoming.first.targetLoad} load'),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final recommendation =
+        ref.watch(todayDailyCoachingRecommendationProvider).valueOrNull;
+    return ref.watch(webPortalDataProvider).when(
+          loading: () => const SizedBox.shrink(),
+          error: (error, stack) => const SizedBox.shrink(),
+          data: (data) {
+            if (data == null) return const SizedBox.shrink();
+            final latest = data.recovery.isEmpty ? null : data.recovery.first;
+            final week = data.activitiesSince(const Duration(days: 7));
+            final todayNutrition = data.nutritionFor(DateTime.now());
+            final upcoming = data.planned
+                .where((session) => !session.day.isBefore(DateTime.now()))
+                .toList();
+            return Column(
+              children: [
+                if (recommendation != null) ...[
+                  WebTodayCoachingCard(recommendation: recommendation),
+                  const SizedBox(height: 18),
+                ],
+                _MetricWrap(metrics: [
+                  (
+                    'Latest sleep',
+                    latest?.sleepMinutes == null
+                        ? '—'
+                        : '${(latest!.sleepMinutes! / 60).toStringAsFixed(1)} h'
                   ),
-                ),
+                  (
+                    'Resting HR',
+                    latest?.restingHeartRate == null
+                        ? '—'
+                        : '${latest!.restingHeartRate!.toStringAsFixed(0)} bpm'
+                  ),
+                  (
+                    '7-day load',
+                    week
+                        .fold<double>(0, (sum, ride) => sum + ride.trainingLoad)
+                        .toStringAsFixed(0)
+                  ),
+                  ('Today’s calories', '${todayNutrition.calories} kcal'),
+                  ('Today’s water', '${todayNutrition.waterMillilitres} ml'),
+                ]),
+                if (upcoming.isNotEmpty) ...[
+                  const SizedBox(height: 18),
+                  _SectionCard(
+                    title: 'Next planned session',
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const CircleAvatar(
+                          child: Icon(Icons.directions_bike)),
+                      title: Text(upcoming.first.title,
+                          style: const TextStyle(fontWeight: FontWeight.w800)),
+                      subtitle: Text(
+                          '${_longDate(upcoming.first.day)} • ${upcoming.first.durationMinutes} min • ${upcoming.first.targetLoad} load'),
+                    ),
+                  ),
+                ],
               ],
-            ],
-          );
-        },
-      );
+            );
+          },
+        );
+  }
 }
 
 class _MetricChip extends StatelessWidget {

@@ -1,12 +1,20 @@
 import 'package:cycle_ready/src/features/health/domain/health_snapshot.dart';
 import 'package:cycle_ready/src/features/health/domain/sleep_duration.dart';
 import 'package:cycle_ready/src/features/health/domain/resting_heart_rate.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:health/health.dart';
 
 class HealthConnectRepository {
-  HealthConnectRepository({Health? health}) : _health = health ?? Health();
+  HealthConnectRepository({Health? health, FlutterSecureStorage? storage})
+      : _health = health ?? Health(),
+        _storage = storage ?? const FlutterSecureStorage();
 
   final Health _health;
+  final FlutterSecureStorage _storage;
+
+  static const _authorizationConfirmedKey =
+      'healthConnectAuthorizationConfirmed';
+  static const _permissionContractVersion = '2';
 
   static const types = <HealthDataType>[
     HealthDataType.SLEEP_ASLEEP,
@@ -20,11 +28,26 @@ class HealthConnectRepository {
     HealthDataType.WEIGHT,
     HealthDataType.BODY_FAT_PERCENTAGE,
     HealthDataType.WORKOUT,
+    // The health plugin enriches workouts from associated distance, energy and
+    // step records, including for cycling sessions. Request them explicitly so
+    // reading an ExerciseSessionRecord cannot fail after exercise access is
+    // granted.
+    HealthDataType.DISTANCE_DELTA,
+    HealthDataType.TOTAL_CALORIES_BURNED,
+    HealthDataType.STEPS,
   ];
 
   Future<void> configure() => _health.configure();
 
   Future<List<HealthDataType>> grantedTypes() async {
+    // Health Connect's platform API cannot reliably report permission state
+    // before the app has requested access. Without this local confirmation the
+    // health plugin can return manifest-declared types as granted and then emit
+    // SecurityExceptions while reading them on startup.
+    if (await _storage.read(key: _authorizationConfirmedKey) !=
+        _permissionContractVersion) {
+      return const [];
+    }
     await configure();
     final granted = <HealthDataType>[];
     for (final type in types) {
@@ -40,15 +63,41 @@ class HealthConnectRepository {
         // One unsupported category must not disconnect all other categories.
       }
     }
-    return granted;
+    return safeReadableTypes(granted);
+  }
+
+  static List<HealthDataType> safeReadableTypes(
+    Iterable<HealthDataType> granted,
+  ) {
+    final readable = granted.toSet();
+    const workoutDependencies = {
+      HealthDataType.WORKOUT,
+      HealthDataType.DISTANCE_DELTA,
+      HealthDataType.TOTAL_CALORIES_BURNED,
+      HealthDataType.STEPS,
+    };
+    if (!readable.containsAll(workoutDependencies)) {
+      readable.remove(HealthDataType.WORKOUT);
+    }
+    return [
+      for (final type in types)
+        if (readable.contains(type)) type,
+    ];
   }
 
   Future<bool> requestPermissions() async {
     await configure();
-    return _health.requestAuthorization(
+    final authorized = await _health.requestAuthorization(
       types,
       permissions: List.filled(types.length, HealthDataAccess.READ),
     );
+    if (authorized) {
+      await _storage.write(
+        key: _authorizationConfirmedKey,
+        value: _permissionContractVersion,
+      );
+    }
+    return authorized;
   }
 
   Future<HealthSnapshot> readLatest(List<HealthDataType> grantedTypes) async {
@@ -61,13 +110,15 @@ class HealthConnectRepository {
       endTime: now,
     );
     final points = _health.removeDuplicates(raw);
-    final allSleepPoints = points.where((point) => const {
-          HealthDataType.SLEEP_ASLEEP,
-          HealthDataType.SLEEP_DEEP,
-          HealthDataType.SLEEP_LIGHT,
-          HealthDataType.SLEEP_REM,
-          HealthDataType.SLEEP_SESSION,
-        }.contains(point.type));
+    final allSleepPoints = points.where(
+      (point) => const {
+        HealthDataType.SLEEP_ASLEEP,
+        HealthDataType.SLEEP_DEEP,
+        HealthDataType.SLEEP_LIGHT,
+        HealthDataType.SLEEP_REM,
+        HealthDataType.SLEEP_SESSION,
+      }.contains(point.type),
+    );
     final sleepMinutes = _latestSleepMinutes(allSleepPoints.toList());
     final sleepEndedAt = _latestSleepEnd(allSleepPoints.toList());
     final workouts = points.where((point) {
@@ -90,15 +141,14 @@ class HealthConnectRepository {
       );
     }).toList();
 
-    final recordedResting =
-        _latestNumeric(points, HealthDataType.RESTING_HEART_RATE);
+    final recordedResting = _latestNumeric(
+      points,
+      HealthDataType.RESTING_HEART_RATE,
+    );
     final estimatedResting = estimateRestingHeartRate(
       points
           .where((point) => point.type == HealthDataType.HEART_RATE)
-          .map((point) => TimedHeartRate(
-                point.dateFrom,
-                _numeric(point) ?? 0,
-              )),
+          .map((point) => TimedHeartRate(point.dateFrom, _numeric(point) ?? 0)),
       now: now,
     );
     final weightPoints = points
@@ -109,20 +159,23 @@ class HealthConnectRepository {
         .where((point) => point.type == HealthDataType.BODY_FAT_PERCENTAGE)
         .where((point) => _numeric(point) != null)
         .toList();
-    final bodyMeasurements =
-        _deduplicateBodyMeasurements(weightPoints.map((weight) {
-      final nearestFat = fatPoints
-          .where((fat) =>
-              fat.dateFrom.difference(weight.dateFrom).abs() <
-              const Duration(minutes: 5))
-          .firstOrNull;
-      return ImportedBodyMeasurement(
-        measuredAt: weight.dateFrom,
-        weightKg: _numeric(weight)!,
-        bodyFatPercent: nearestFat == null ? null : _numeric(nearestFat),
-        source: weight.sourceName,
-      );
-    }).toList());
+    final bodyMeasurements = _deduplicateBodyMeasurements(
+      weightPoints.map((weight) {
+        final nearestFat = fatPoints
+            .where(
+              (fat) =>
+                  fat.dateFrom.difference(weight.dateFrom).abs() <
+                  const Duration(minutes: 5),
+            )
+            .firstOrNull;
+        return ImportedBodyMeasurement(
+          measuredAt: weight.dateFrom,
+          weightKg: _numeric(weight)!,
+          bodyFatPercent: nearestFat == null ? null : _numeric(nearestFat),
+          source: weight.sourceName,
+        );
+      }).toList(),
+    );
 
     return HealthSnapshot(
       sleepMinutes: sleepMinutes == 0 ? null : sleepMinutes,
@@ -130,11 +183,15 @@ class HealthConnectRepository {
       restingHeartRate: recordedResting ?? estimatedResting,
       restingHeartRateEstimated:
           recordedResting == null && estimatedResting != null,
-      hrvMilliseconds:
-          _latestNumeric(points, HealthDataType.HEART_RATE_VARIABILITY_RMSSD),
+      hrvMilliseconds: _latestNumeric(
+        points,
+        HealthDataType.HEART_RATE_VARIABILITY_RMSSD,
+      ),
       weightKg: _latestNumeric(points, HealthDataType.WEIGHT),
-      bodyFatPercent:
-          _latestNumeric(points, HealthDataType.BODY_FAT_PERCENTAGE),
+      bodyFatPercent: _latestNumeric(
+        points,
+        HealthDataType.BODY_FAT_PERCENTAGE,
+      ),
       workoutCount: workouts.length,
       workouts: workouts,
       bodyMeasurements: bodyMeasurements,
@@ -177,14 +234,16 @@ class HealthConnectRepository {
       }).toList();
       final chosen = stages.isEmpty ? [session] : stages;
       return uniqueSleepMinutes(
-        chosen.map((point) => SleepInterval(
-              point.dateFrom.isBefore(session.dateFrom)
-                  ? session.dateFrom
-                  : point.dateFrom,
-              point.dateTo.isAfter(session.dateTo)
-                  ? session.dateTo
-                  : point.dateTo,
-            )),
+        chosen.map(
+          (point) => SleepInterval(
+            point.dateFrom.isBefore(session.dateFrom)
+                ? session.dateFrom
+                : point.dateFrom,
+            point.dateTo.isAfter(session.dateTo)
+                ? session.dateTo
+                : point.dateTo,
+          ),
+        ),
       );
     }
 

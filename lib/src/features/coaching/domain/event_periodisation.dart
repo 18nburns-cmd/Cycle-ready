@@ -1,4 +1,12 @@
-enum EventPhase { base, build, specific, taper, eventWeek, complete }
+enum EventPhase {
+  foundation,
+  base,
+  build,
+  specific,
+  taper,
+  eventWeek,
+  complete
+}
 
 class EventTrainingBlock {
   const EventTrainingBlock({
@@ -25,6 +33,7 @@ EventPhase eventPhaseFor(DateTime day, DateTime eventDate) {
   if (days <= 10) return EventPhase.taper;
   if (days <= 35) return EventPhase.specific;
   if (days <= 77) return EventPhase.build;
+  if (days > 224) return EventPhase.foundation;
   return EventPhase.base;
 }
 
@@ -51,6 +60,7 @@ List<EventTrainingBlock> buildEventBlocks({
       end: blockEnd,
       focus: eventPhaseFocus(phase),
       loadDirection: switch (phase) {
+        EventPhase.foundation => 'Establish consistency',
         EventPhase.base => 'Build gradually',
         EventPhase.build => 'Progress load',
         EventPhase.specific => 'Hold productive load',
@@ -65,6 +75,8 @@ List<EventTrainingBlock> buildEventBlocks({
 }
 
 String eventPhaseFocus(EventPhase phase) => switch (phase) {
+      EventPhase.foundation =>
+        'Aerobic endurance, consistency, technique and durability foundations.',
       EventPhase.base =>
         'Aerobic base, consistency, technique and sustainable strength.',
       EventPhase.build =>
@@ -80,6 +92,7 @@ String eventPhaseFocus(EventPhase phase) => switch (phase) {
     };
 
 String eventPhaseLabel(EventPhase phase) => switch (phase) {
+      EventPhase.foundation => 'Foundation',
       EventPhase.base => 'Base',
       EventPhase.build => 'Build',
       EventPhase.specific => 'Event specific',

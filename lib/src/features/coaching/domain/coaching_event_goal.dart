@@ -1,5 +1,6 @@
 class CoachingEventGoal {
   const CoachingEventGoal({
+    this.id,
     required this.name,
     required this.eventDate,
     required this.distanceKm,
@@ -10,6 +11,8 @@ class CoachingEventGoal {
     required this.availableDays,
     required this.longRideMinutes,
   });
+
+  final int? id;
 
   final String name;
   final DateTime eventDate;

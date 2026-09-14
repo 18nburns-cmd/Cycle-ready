@@ -79,4 +79,44 @@ void main() {
     );
     expect(depleted.remainingHours, greaterThan(recovered.remainingHours));
   });
+
+  test('difficult post-ride feedback extends recovery time', () {
+    final session = [(finishedAt: now, load: 80.0)];
+    final normal = estimate(sessions: session);
+    final difficult = calculateRecoveryTime(
+      sessions: session,
+      now: now,
+      readiness: 75,
+      sleepScore: 85,
+      form: 0,
+      acuteFatigue: 40,
+      perceivedFatigue: 2,
+      soreness: 2,
+      postRideEffort: 9,
+      postRideLegFatigue: 8,
+      postRideDiscomfort: 2,
+    );
+
+    expect(difficult.remainingHours, greaterThan(normal.remainingHours));
+    expect(difficult.explanation, contains('post-ride feedback'));
+  });
+
+  test('post-ride discomfort receives the strongest extension', () {
+    final session = [(finishedAt: now, load: 80.0)];
+    final difficult = calculateRecoveryTime(
+      sessions: session,
+      now: now,
+      readiness: 75,
+      sleepScore: 85,
+      form: 0,
+      acuteFatigue: 40,
+      perceivedFatigue: 2,
+      soreness: 2,
+      postRideEffort: 5,
+      postRideLegFatigue: 5,
+      postRideDiscomfort: 8,
+    );
+
+    expect(difficult.explanation, contains('post-ride discomfort'));
+  });
 }

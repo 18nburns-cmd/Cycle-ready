@@ -81,7 +81,10 @@ class ActivitiesScreen extends ConsumerWidget {
 }
 
 class _ActivityList extends StatelessWidget {
-  const _ActivityList({required this.metrics, required this.forecast});
+  const _ActivityList({
+    required this.metrics,
+    required this.forecast,
+  });
   final TrainingMetrics metrics;
   final List<FitnessPoint> forecast;
   @override

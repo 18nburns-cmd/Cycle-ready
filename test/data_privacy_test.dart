@@ -18,13 +18,15 @@ void main() {
     );
 
     final export = await database.exportSnapshot();
-    expect(export['schemaVersion'], 20);
+    expect(export['schemaVersion'], 24);
     expect(
         export.keys,
         containsAll([
           'activities',
           'activitySamples',
           'athleteSettings',
+          'athleteStates',
+          'athleteStateHistory',
           'dailyRecovery',
           'bodyMeasurements',
           'plannedSessions',
@@ -34,6 +36,7 @@ void main() {
           'nutritionEntries',
           'dailyNutritionTargets',
           'rideCoachReports',
+          'pendingCloudMutations',
         ]));
     expect(export['bodyMeasurements'], hasLength(1));
   });

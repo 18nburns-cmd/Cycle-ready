@@ -25,16 +25,25 @@ void main() {
     ));
     expect(result.score, lessThan(34));
     expect(result.band, ReadinessBand.low);
+    expect(result.fatigueScore, 20);
   });
 
   test('missing HRV falls back to resting heart rate', () {
     final result = calculator.calculate(_input(hrvMilliseconds: null));
     expect(result.score, inInclusiveRange(0, 100));
+    expect(result.recoveryScore, inInclusiveRange(0, 100));
+    expect(result.fatigueScore, inInclusiveRange(0, 100));
   });
 
   test('missing recovery data stays neutral instead of reporting ready', () {
     final result = calculator.calculate(RecoveryInput.defaults());
     expect(result.band, ReadinessBand.moderate);
+    expect(result.confidenceScore, 25);
+  });
+
+  test('confidence rises only when evidence is available', () {
+    final result = calculator.calculate(_input());
+    expect(result.confidenceScore, 100);
   });
 }
 

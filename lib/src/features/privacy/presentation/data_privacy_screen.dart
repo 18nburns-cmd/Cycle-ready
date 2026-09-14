@@ -1,4 +1,6 @@
 import 'package:cycle_ready/src/features/privacy/application/data_privacy_controller.dart';
+import 'package:cycle_ready/src/features/cloud_sync/application/cloud_auth_provider.dart';
+import 'package:cycle_ready/src/features/cloud_sync/application/secure_sign_out_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -14,81 +16,46 @@ class _DataPrivacyScreenState extends ConsumerState<DataPrivacyScreen> {
   bool working = false;
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(
-          title: const Text('Data & privacy'),
-        ),
-        body: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      Icons.shield_outlined,
-                      size: 40,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    const SizedBox(height: 14),
-                    Text(
-                      'Your health data stays on this phone',
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleLarge
-                          ?.copyWith(fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'CycleReady stores imported rides, heart and sleep '
-                      'summaries, check-ins, body measurements and plans in '
-                      'its local database. Intervals.icu credentials are held '
-                      'in encrypted device storage.',
-                    ),
-                  ],
-                ),
+  Widget build(BuildContext context) {
+    final account = ref.watch(cloudAccountProvider).valueOrNull;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Data & privacy'),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.shield_outlined,
+                    size: 40,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    'Your health data stays on this phone',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleLarge
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'CycleReady stores imported rides, heart and sleep '
+                    'summaries, check-ins, body measurements and plans in '
+                    'its local database. Intervals.icu credentials are held '
+                    'in encrypted device storage.',
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 12),
-            Card(
-              child: ListTile(
-                enabled: !working,
-                contentPadding: const EdgeInsets.all(18),
-                leading: const CircleAvatar(
-                  child: Icon(Icons.download_outlined),
-                ),
-                title: const Text(
-                  'Export my data',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
-                subtitle: const Text(
-                  'Save a readable JSON copy of all CycleReady records.',
-                ),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: _export,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Card(
-              child: ListTile(
-                enabled: !working,
-                contentPadding: const EdgeInsets.all(18),
-                leading: const CircleAvatar(
-                  child: Icon(Icons.restore),
-                ),
-                title: const Text(
-                  'Restore from backup',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
-                subtitle: const Text(
-                  'Validate and restore a CycleReady JSON export. Current local records will be replaced.',
-                ),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: _confirmRestore,
-              ),
-            ),
+          ),
+          if (account != null) ...[
             const SizedBox(height: 12),
             Card(
               child: ListTile(
@@ -96,40 +63,149 @@ class _DataPrivacyScreenState extends ConsumerState<DataPrivacyScreen> {
                 contentPadding: const EdgeInsets.all(18),
                 leading: CircleAvatar(
                   backgroundColor: Theme.of(context).colorScheme.errorContainer,
-                  child: Icon(
-                    Icons.delete_forever_outlined,
-                    color: Theme.of(context).colorScheme.onErrorContainer,
-                  ),
+                  child: Icon(Icons.person_remove_outlined,
+                      color: Theme.of(context).colorScheme.onErrorContainer),
                 ),
-                title: Text(
-                  'Erase local data',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: Theme.of(context).colorScheme.error,
-                  ),
-                ),
+                title: Text('Delete cloud account',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: Theme.of(context).colorScheme.error)),
                 subtitle: const Text(
-                  'Permanently removes local health data and disconnects '
-                  'Intervals.icu. External services are not changed.',
+                  'Permanently deletes the account and all CycleReady cloud data.',
                 ),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: _confirmErase,
+                onTap: _confirmDeleteAccount,
               ),
             ),
-            if (working) ...[
-              const SizedBox(height: 20),
-              const LinearProgressIndicator(),
-            ],
-            const SizedBox(height: 20),
-            Text(
-              'CycleReady provides wellness and training guidance, not '
-              'medical diagnosis. Export files can contain sensitive health '
-              'information—store them securely.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
           ],
-        ),
+          const SizedBox(height: 12),
+          Card(
+            child: ListTile(
+              enabled: !working,
+              contentPadding: const EdgeInsets.all(18),
+              leading: const CircleAvatar(
+                child: Icon(Icons.download_outlined),
+              ),
+              title: const Text(
+                'Export my data',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              subtitle: const Text(
+                'Save a readable JSON copy of all CycleReady records.',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: _export,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: ListTile(
+              enabled: !working,
+              contentPadding: const EdgeInsets.all(18),
+              leading: const CircleAvatar(
+                child: Icon(Icons.restore),
+              ),
+              title: const Text(
+                'Restore from backup',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              subtitle: const Text(
+                'Validate and restore a CycleReady JSON export. Current local records will be replaced.',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: _confirmRestore,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: ListTile(
+              enabled: !working,
+              contentPadding: const EdgeInsets.all(18),
+              leading: CircleAvatar(
+                backgroundColor: Theme.of(context).colorScheme.errorContainer,
+                child: Icon(
+                  Icons.delete_forever_outlined,
+                  color: Theme.of(context).colorScheme.onErrorContainer,
+                ),
+              ),
+              title: Text(
+                'Erase local data',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+              ),
+              subtitle: const Text(
+                'Permanently removes local health data and disconnects '
+                'Intervals.icu. External services are not changed.',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: _confirmErase,
+            ),
+          ),
+          if (working) ...[
+            const SizedBox(height: 20),
+            const LinearProgressIndicator(),
+          ],
+          const SizedBox(height: 20),
+          Text(
+            'CycleReady provides wellness and training guidance, not '
+            'medical diagnosis. Export files can contain sensitive health '
+            'information—store them securely.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _confirmDeleteAccount() async {
+    final controller = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Permanently delete account?'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text(
+            'This permanently deletes your cloud profile, rides, wellness, plans, coaching history, provider connection and local data. This cannot be undone. Type DELETE to continue.',
+          ),
+          const SizedBox(height: 12),
+          TextField(
+              controller: controller,
+              decoration: const InputDecoration(labelText: 'DELETE')),
+        ]),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () =>
+                Navigator.pop(context, controller.text.trim() == 'DELETE'),
+            child: const Text('Delete permanently'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (confirmed != true || !mounted) return;
+    setState(() => working = true);
+    try {
+      await ref.read(secureSignOutControllerProvider).deleteAccount();
+      if (!mounted) return;
+      context.go('/');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('CycleReady account deleted.')),
       );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Account deletion stopped safely: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => working = false);
+    }
+  }
 
   Future<void> _export() async {
     setState(() => working = true);

@@ -155,8 +155,7 @@ class PhaseAwareWorkoutLibrary {
       );
     }
     if (requestedType == SessionType.tempo) {
-      final tempo = goal == WorkoutLibraryGoal.endurance &&
-          phase == WorkoutLibraryPhase.foundation;
+      final tempo = phase == WorkoutLibraryPhase.foundation;
       final structure = tempo
           ? const [(3, 12), (2, 20), (3, 20)][week]
           : const [(3, 10), (3, 12), (2, 20)][week];

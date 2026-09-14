@@ -1,4 +1,5 @@
 import 'package:cycle_ready/src/features/cloud_sync/domain/cloud_snapshot.dart';
+import 'package:cycle_ready/src/features/cloud_sync/domain/relational_coaching_data.dart';
 import 'package:cycle_ready/src/features/cloud_sync/domain/web_portal_data.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -85,5 +86,103 @@ void main() {
     expect(data.planned.single.title, 'Endurance 90');
     expect(data.nutritionFor(DateTime(2026, 8, 25)).calories, 600);
     expect(data.ftpHistory.single.watts, 218);
+  });
+
+  test('maps authoritative relational records without a snapshot', () {
+    final relational = RelationalCoachingData(
+      athlete: const {
+        'current_ftp': 250,
+        'maximum_hr': 190,
+        'body_mass_kg': 75,
+      },
+      activities: const [
+        {
+          'id': 'activity-1',
+          'started_at': '2026-08-30T08:00:00Z',
+          'duration_seconds': 3600,
+          'distance_metres': 32000,
+          'elevation_metres': 300,
+          'average_power': 205,
+          'normalized_power': 220,
+          'average_hr': 147,
+          'average_cadence': 88,
+          'training_load': 70,
+          'source_payload': {'name': 'Threshold session'},
+        }
+      ],
+      wellness: const [
+        {
+          'recorded_date': '2026-08-31',
+          'sleep_minutes': 460,
+          'hrv_ms': 55,
+          'resting_hr': 51,
+        }
+      ],
+      weights: const [
+        {'measured_at': '2026-08-31T07:00:00Z', 'weight_kg': 74.5}
+      ],
+      plannedSessions: const [
+        {
+          'scheduled_date': '2026-09-01',
+          'session_type': 'endurance',
+          'purpose': 'Aerobic endurance',
+          'planned_duration_minutes': 60,
+          'planned_load': 45,
+          'primary_adaptation': 'aerobic_endurance',
+          'adaptation_status': 'KEEP',
+        }
+      ],
+      ftpHistory: const [
+        {
+          'effective_date': '2026-08-01',
+          'ftp': 250,
+          'confidence': 0.9,
+        }
+      ],
+      nutritionEntries: const [
+        {
+          'recorded_at': '2026-08-31T12:00:00Z',
+          'label': 'Lunch',
+          'calories': 550,
+          'carbohydrate_grams': 75,
+          'protein_grams': 28,
+          'fat_grams': 16,
+          'water_millilitres': 400,
+        }
+      ],
+      nutritionTargets: const [
+        {
+          'target_date': '2026-08-31',
+          'calories': 2400,
+          'carbohydrate_grams': 300,
+          'protein_grams': 140,
+          'fat_grams': 70,
+          'water_millilitres': 3000,
+        }
+      ],
+      latestReadiness: const {'readiness_score': 76},
+      latestDecision: AuthoritativeCoachingDecision.fromJson(const {
+        'id': 'decision-1',
+        'created_at': '2026-08-31T06:00:00Z',
+        'decision': 'KEEP',
+        'adaptation_level': 0,
+        'reason_codes': ['PLANNED_SESSION_SUITABLE'],
+        'explanation': 'The planned session remains suitable.',
+        'confidence': 0.9,
+        'original_workout': {'id': 'ENDURANCE_45'},
+        'replacement_workout': {'id': 'ENDURANCE_45'},
+        'coaching_model_version': 'adaptive-decision-v2.0.0',
+      }),
+      updatedAt: DateTime.utc(2026, 8, 31),
+    );
+
+    final portal = WebPortalData.fromRelational(relational);
+    expect(portal.activities.single.title, 'Threshold session');
+    expect(portal.activities.single.normalisedPower, 220);
+    expect(portal.recovery.single.hrvMilliseconds, 55);
+    expect(portal.planned.single.adaptationReason, 'KEEP');
+    expect(portal.ftp, 250);
+    expect(portal.currentWeight, 74.5);
+    expect(portal.nutritionFor(DateTime(2026, 8, 31)).calories, 550);
   });
 }

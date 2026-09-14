@@ -14,6 +14,16 @@ class IntervalsPlannedWorkout {
   final int durationSeconds;
 }
 
+class IntervalsRemoteWorkout {
+  const IntervalsRemoteWorkout({
+    required this.providerId,
+    required this.workout,
+  });
+
+  final String providerId;
+  final IntervalsPlannedWorkout workout;
+}
+
 String intervalsWorkoutDescription({
   required String sessionType,
   required int durationMinutes,

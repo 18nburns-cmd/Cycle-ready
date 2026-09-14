@@ -11,7 +11,7 @@ class EventGoalScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final event = ref.watch(eventGoalProvider);
+    final events = ref.watch(eventGoalsProvider);
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -21,18 +21,22 @@ class EventGoalScreen extends ConsumerWidget {
         actions: [
           IconButton(
             tooltip: 'Edit event',
-            onPressed: () => _editEvent(context, ref, event.valueOrNull),
-            icon: const Icon(Icons.edit_calendar_outlined),
+            onPressed: () => _editEvent(context, ref, null),
+            icon: const Icon(Icons.add),
           ),
         ],
       ),
-      body: event.when(
+      body: events.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, __) =>
             const Center(child: Text('Event could not be loaded.')),
-        data: (value) => value == null
+        data: (value) => value.isEmpty
             ? _EmptyEvent(onCreate: () => _editEvent(context, ref, null))
-            : _EventPlan(event: value),
+            : _EventPlan(
+                events: value,
+                onEdit: (event) => _editEvent(context, ref, event),
+                onDelete: (event) => _deleteEvent(context, ref, event),
+              ),
       ),
     );
   }
@@ -210,6 +214,7 @@ class EventGoalScreen extends ConsumerWidget {
       return;
     }
     await ref.read(eventGoalControllerProvider).save(
+          id: existing?.id,
           name: name.text,
           eventDate: date,
           distanceKm: parsedDistance,
@@ -220,6 +225,35 @@ class EventGoalScreen extends ConsumerWidget {
           availableDays: days,
           longRideMinutes: longRide,
         );
+  }
+
+  Future<void> _deleteEvent(
+    BuildContext context,
+    WidgetRef ref,
+    CoachingEventGoal event,
+  ) async {
+    if (event.id == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete event?'),
+        content: Text(
+          '${event.name} will be removed. Completed rides will not be changed. Rebuild the plan afterward so remaining events govern future training.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete event'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await ref.read(eventGoalControllerProvider).delete(event.id!);
   }
 
   static String _date(DateTime value) =>
@@ -261,11 +295,24 @@ class _EmptyEvent extends StatelessWidget {
 }
 
 class _EventPlan extends ConsumerWidget {
-  const _EventPlan({required this.event});
-  final CoachingEventGoal event;
+  const _EventPlan({
+    required this.events,
+    required this.onEdit,
+    required this.onDelete,
+  });
+  final List<CoachingEventGoal> events;
+  final ValueChanged<CoachingEventGoal> onEdit;
+  final ValueChanged<CoachingEventGoal> onDelete;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final sorted = [...events]..sort((left, right) {
+        final priority = left.priority.compareTo(right.priority);
+        return priority != 0
+            ? priority
+            : left.eventDate.compareTo(right.eventDate);
+      });
+    final event = sorted.first;
     final now = DateTime.now();
     final days = event.eventDate
         .difference(DateTime(now.year, now.month, now.day))
@@ -282,6 +329,49 @@ class _EventPlan extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
       children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Your events',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w800),
+              ),
+            ),
+            Text('${events.length} planned'),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ...sorted.map(
+          (item) => Card(
+            child: ListTile(
+              leading: CircleAvatar(child: Text(item.priority)),
+              title: Text(item.name),
+              subtitle: Text(
+                '${EventGoalScreen._date(item.eventDate)} · ${Units.distance(item.distanceKm * 1000)} · ${item.terrain}',
+              ),
+              trailing: PopupMenuButton<String>(
+                onSelected: (value) =>
+                    value == 'edit' ? onEdit(item) : onDelete(item),
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'edit', child: Text('Edit event')),
+                  PopupMenuItem(value: 'delete', child: Text('Delete event')),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Text(
+          'Primary planning event',
+          style: Theme.of(context)
+              .textTheme
+              .titleLarge
+              ?.copyWith(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 8),
         Card(
           color: Theme.of(context).colorScheme.primaryContainer,
           child: Padding(

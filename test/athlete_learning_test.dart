@@ -52,4 +52,22 @@ void main() {
     const profile = WorkoutResponseSnapshot(sampleCount: 2);
     expect(profile.coachingInsight, contains('establishing'));
   });
+
+  test('personalises future dose from repeated athlete response', () {
+    const response = WorkoutResponseSnapshot(
+      sampleCount: 6,
+      averageLoadRatio: 1,
+      averageDurationRatio: 1,
+      completionRate: 1,
+      feedbackSamples: 6,
+      averageLegFatigue: 2,
+    );
+
+    final adjustment = personaliseWorkout(response);
+
+    expect(adjustment.loadMultiplier, 1.05);
+    expect(adjustment.durationMultiplier, 1.05);
+    expect(adjustment.confidence, .75);
+    expect(adjustment.reason, contains('small progression'));
+  });
 }

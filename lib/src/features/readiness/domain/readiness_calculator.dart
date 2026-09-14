@@ -9,6 +9,7 @@ class ReadinessCalculator {
   ReadinessResult calculate(RecoveryInput input) {
     final sleep = _sleepScore(input);
     final recovery = _recoveryScore(input);
+    final fatigue = _fatigueScore(input);
     final load = _loadScore(input);
     final checkIn = _checkInScore(input);
     final factors = [
@@ -60,6 +61,9 @@ class ReadinessCalculator {
 
     return ReadinessResult(
       score: score,
+      recoveryScore: recovery.round().clamp(0, 100),
+      fatigueScore: fatigue.round().clamp(0, 100),
+      confidenceScore: _confidenceScore(input),
       band: band,
       headline: switch (band) {
         ReadinessBand.high => 'Ready to train',
@@ -116,6 +120,17 @@ class ReadinessCalculator {
     final stress = (6 - input.stress.clamp(1, 5)) * 20;
     return (positiveMotivation + fatigue + soreness + stress) / 4;
   }
+
+  double _fatigueScore(RecoveryInput input) {
+    if (!input.hasCheckIn) return 50;
+    return ((6 - input.fatigue.clamp(1, 5)) * 20).toDouble();
+  }
+
+  int _confidenceScore(RecoveryInput input) => (25 +
+          (input.hasSleepData ? 25 : 0) +
+          (input.hasRecoverySignals ? 25 : 0) +
+          (input.hasCheckIn ? 25 : 0))
+      .clamp(0, 100);
 
   double _clamp100(num value) => value.clamp(0, 100).toDouble();
 }

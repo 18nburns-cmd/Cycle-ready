@@ -2,20 +2,22 @@ import 'package:cycle_ready/src/core/database/database_provider.dart';
 import 'package:cycle_ready/src/features/cloud_sync/application/cloud_auth_provider.dart';
 import 'package:cycle_ready/src/features/cloud_sync/application/cloud_snapshot_provider.dart';
 import 'package:cycle_ready/src/features/cloud_sync/application/cloud_sync_service.dart';
+import 'package:cycle_ready/src/features/cloud_sync/data/supabase_planned_session_sync_repository.dart';
+import 'package:cycle_ready/src/features/cloud_sync/data/supabase_event_goal_sync_repository.dart';
+import 'package:cycle_ready/src/features/coaching/data/drift_event_goal_repository.dart';
+import 'package:cycle_ready/src/features/offline_sync/application/offline_mutation_sync_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class CloudSyncState {
   const CloudSyncState({
     this.syncing = false,
     this.lastUpload,
-    this.conflict = false,
-    this.message = 'Sign in to protect and share your CycleReady data.',
+    this.message = 'Sign in to synchronise CycleReady relational data.',
   });
 
   final bool syncing;
   final DateTime? lastUpload;
-  final bool conflict;
   final String message;
 }
 
@@ -25,16 +27,8 @@ final cloudSyncControllerProvider =
 );
 
 class CloudSyncController extends AsyncNotifier<CloudSyncState> {
-  static const _lastRemoteUpdateKey = 'cycle_ready_last_remote_snapshot';
-  final _storage = const FlutterSecureStorage();
-
   @override
-  Future<CloudSyncState> build() async {
-    final stored = await _storage.read(key: _lastRemoteUpdateKey);
-    return CloudSyncState(
-      lastUpload: stored == null ? null : DateTime.tryParse(stored)?.toLocal(),
-    );
-  }
+  Future<CloudSyncState> build() async => const CloudSyncState();
 
   Future<void> upload() async {
     final previous = state.valueOrNull ?? const CloudSyncState();
@@ -45,40 +39,38 @@ class CloudSyncController extends AsyncNotifier<CloudSyncState> {
     ));
     try {
       final account = await ref.read(cloudAccountProvider.future);
-      final repository = ref.read(cloudSnapshotRepositoryProvider);
-      if (account == null || repository == null) {
+      final sampleRepository = ref.read(cloudActivitySampleRepositoryProvider);
+      if (account == null || sampleRepository == null) {
         throw StateError('Sign in before synchronising CycleReady data.');
       }
-      final stored = await _storage.read(key: _lastRemoteUpdateKey);
       final service = CloudSyncService(
         database: ref.read(databaseProvider),
-        repository: repository,
-        sampleRepository: ref.read(cloudActivitySampleRepositoryProvider),
+        repository: ref.read(cloudSnapshotRepositoryProvider)!,
+        sampleRepository: sampleRepository,
         deviceName: 'CycleReady Android',
       );
-      final outcome = await service.uploadIfSafe(
-        lastKnownRemoteUpdate:
-            stored == null ? null : DateTime.tryParse(stored),
-      );
-      if (outcome == CloudSyncOutcome.remoteIsNewer) {
-        state = AsyncData(CloudSyncState(
-          lastUpload: previous.lastUpload,
-          conflict: true,
-          message:
-              'A newer cloud copy exists. Nothing was overwritten; review it on the web before replacing either copy.',
-        ));
-        return;
-      }
-      final remote = await repository.fetch();
-      final updatedAt = remote?.updatedAt ?? DateTime.now().toUtc();
-      await _storage.write(
-        key: _lastRemoteUpdateKey,
-        value: updatedAt.toUtc().toIso8601String(),
-      );
-      ref.invalidate(cloudSnapshotProvider);
+      await service.uploadDetailedActivitySamples();
+      final events = await ref.read(eventGoalRepositoryProvider).getGoals();
+      await SupabaseEventGoalSyncRepository(Supabase.instance.client)
+          .replaceEvents(events);
+      final now = DateTime.now();
+      final futureSessions =
+          await ref.read(databaseProvider).getPlannedSessions(
+                DateTime(now.year, now.month, now.day),
+                DateTime(now.year, now.month, now.day + 42),
+              );
+      await SupabasePlannedSessionSyncRepository(Supabase.instance.client)
+          .replaceFuture(futureSessions);
+      final mutationResult =
+          await ref.read(offlineMutationSyncServiceProvider)?.flush();
+      final conflicts = mutationResult?.conflicts ?? 0;
+      final updatedAt = DateTime.now();
+      ref.invalidate(relationalCoachingDataProvider);
       state = AsyncData(CloudSyncState(
-        lastUpload: updatedAt.toLocal(),
-        message: 'Your latest CycleReady data is available on the web.',
+        lastUpload: updatedAt,
+        message: conflicts == 0
+            ? 'Relational data and ride samples are synchronised.'
+            : '$conflicts cloud change requires review.',
       ));
     } catch (error) {
       state = AsyncData(CloudSyncState(

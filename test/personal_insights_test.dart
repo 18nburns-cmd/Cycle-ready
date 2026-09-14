@@ -85,4 +85,31 @@ void main() {
     expect(report.insights.any((item) => item.kind == 'nutrition'), isFalse);
     expect(report.priorities, hasLength(3));
   });
+
+  test('learns body-weight association without prescribing weight loss', () {
+    final rides = <InsightRide>[];
+    final body = <InsightBodyDay>[];
+    for (var index = 0; index < 8; index++) {
+      final day = now.subtract(Duration(days: index * 3));
+      body.add(InsightBodyDay(day: day, weightKg: 70.0 + index));
+      rides.add(InsightRide(
+        startedAt: day,
+        trainingLoad: 60,
+        averagePower: 180 + index * 4,
+        averageHeartRate: 140,
+      ));
+    }
+
+    final report = engine.build(
+      now: now,
+      rides: rides,
+      recovery: const [],
+      nutrition: const [],
+      body: body,
+    );
+    final insight = report.insights.firstWhere((item) => item.kind == 'body');
+
+    expect(insight.message, contains('not a weight-loss target'));
+    expect(insight.sampleSize, 8);
+  });
 }

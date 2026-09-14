@@ -38,6 +38,13 @@ class InsightNutritionDay {
   final double carbohydrateGrams;
 }
 
+class InsightBodyDay {
+  const InsightBodyDay({required this.day, required this.weightKg});
+
+  final DateTime day;
+  final double weightKg;
+}
+
 class PersonalInsight {
   const PersonalInsight({
     required this.title,
@@ -86,6 +93,7 @@ class PersonalInsightsEngine {
     required List<InsightRide> rides,
     required List<InsightRecoveryDay> recovery,
     required List<InsightNutritionDay> nutrition,
+    List<InsightBodyDay> body = const [],
   }) {
     final today = _day(now);
     final windowStart = today.subtract(const Duration(days: 55));
@@ -112,6 +120,9 @@ class PersonalInsightsEngine {
 
     final carbohydrate = _carbohydrateInsight(inWindow, nutrition);
     if (carbohydrate != null) insights.add(carbohydrate);
+
+    final bodyComposition = _bodyCompositionInsight(inWindow, body);
+    if (bodyComposition != null) insights.add(bodyComposition);
 
     final heartRate = _restingHeartRateInsight(today, recovery);
     if (heartRate != null) insights.add(heartRate);
@@ -305,6 +316,39 @@ class PersonalInsightsEngine {
       kind: 'recovery',
     );
   }
+
+  PersonalInsight? _bodyCompositionInsight(
+    List<InsightRide> rides,
+    List<InsightBodyDay> body,
+  ) {
+    final weights = _keyForBody(body);
+    final pairs = <(double, double)>[];
+    for (final ride in rides) {
+      final weight = weights[_key(ride.startedAt)];
+      if (weight == null ||
+          weight <= 0 ||
+          (ride.averagePower ?? 0) <= 0 ||
+          (ride.averageHeartRate ?? 0) <= 0) {
+        continue;
+      }
+      pairs.add((weight, ride.averagePower! / ride.averageHeartRate!));
+    }
+    if (pairs.length < 3) return null;
+    final correlation = _correlation(pairs);
+    return PersonalInsight(
+      title: 'Body composition and ride efficiency',
+      message: correlation.abs() < .2
+          ? 'No clear relationship between body weight and ride efficiency is visible yet.'
+          : 'Recorded body weight has a ${correlation > 0 ? 'positive' : 'negative'} association with power-to-heart-rate efficiency; treat this as a training signal, not a weight-loss target.',
+      confidence: _confidence(pairs.length, correlation.abs()),
+      sampleSize: pairs.length,
+      kind: 'body',
+    );
+  }
+
+  Map<String, double> _keyForBody(List<InsightBodyDay> body) => {
+        for (final item in body) _key(item.day): item.weightKg,
+      };
 
   PersonalInsight _consistencyInsight(DateTime today, List<InsightRide> rides) {
     final activeWeeks = <int>{};

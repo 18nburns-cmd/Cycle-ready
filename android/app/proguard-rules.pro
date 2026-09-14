@@ -6,3 +6,11 @@
 -keepclasseswithmembernames class * {
     native <methods>;
 }
+
+# The text-recognition plugin supports optional language modules that are not
+# packaged by CycleReady. Its runtime guards those code paths; R8 still needs
+# the absent optional references acknowledged for release shrinking.
+-dontwarn com.google.mlkit.vision.text.chinese.**
+-dontwarn com.google.mlkit.vision.text.devanagari.**
+-dontwarn com.google.mlkit.vision.text.japanese.**
+-dontwarn com.google.mlkit.vision.text.korean.**

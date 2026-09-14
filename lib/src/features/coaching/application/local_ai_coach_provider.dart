@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cycle_ready/src/core/database/app_database.dart';
 import 'package:cycle_ready/src/features/activities/application/ftp_estimate_controller.dart';
 import 'package:cycle_ready/src/features/activities/application/power_curve_provider.dart';
+import 'package:cycle_ready/src/features/activities/application/post_ride_feedback_controller.dart';
 import 'package:cycle_ready/src/features/activities/data/activity_repository.dart';
 import 'package:cycle_ready/src/features/activities/domain/training_metrics.dart';
 import 'package:cycle_ready/src/features/activities/domain/performance_momentum.dart';
@@ -121,6 +122,21 @@ final localCoachDatasetProvider = Provider<LocalCoachDataset>((ref) {
   final strength = ref.watch(strengthWorkloadsProvider).valueOrNull ?? const [];
   final powerProgress =
       ref.watch(powerCurveProgressProvider).valueOrNull ?? const [];
+  final latestRide = activities.isEmpty
+      ? null
+      : activities.reduce(
+          (first, second) =>
+              first.startedAt.isAfter(second.startedAt) ? first : second,
+        );
+  final latestRideFinishedAt = latestRide?.startedAt.add(
+    Duration(seconds: latestRide.durationSeconds),
+  );
+  final latestRideIsRecent = latestRideFinishedAt != null &&
+      !now.difference(latestRideFinishedAt).isNegative &&
+      now.difference(latestRideFinishedAt) <= const Duration(hours: 96);
+  final postRideFeedback = latestRideIsRecent
+      ? ref.watch(postRideFeedbackProvider(latestRide!.id)).valueOrNull
+      : null;
   final sessions = <({DateTime finishedAt, double load})>[
     ...activities.map((activity) => (
           finishedAt: activity.startedAt
@@ -154,6 +170,9 @@ final localCoachDatasetProvider = Provider<LocalCoachDataset>((ref) {
     acuteFatigue: training.fatigue,
     perceivedFatigue: recovery.fatigue,
     soreness: recovery.soreness,
+    postRideEffort: postRideFeedback?.perceivedEffort,
+    postRideLegFatigue: postRideFeedback?.legFatigue,
+    postRideDiscomfort: postRideFeedback?.discomfort,
   );
   final hard = activities.where((activity) {
     if (activity.startedAt.isBefore(now.subtract(const Duration(days: 7)))) {

@@ -2,6 +2,11 @@ import 'package:cycle_ready/src/features/coaching/domain/structured_workout.dart
 import 'package:cycle_ready/src/features/coaching/domain/workout_delivery.dart';
 import 'package:cycle_ready/src/features/intervals/data/intervals_workout_delivery.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:cycle_ready/src/features/intervals/data/intervals_icu_service.dart';
+import 'package:cycle_ready/src/features/intervals/domain/intervals_workout.dart';
 
 void main() {
   test('standard workout contains coaching and delivery-neutral detail', () {
@@ -123,5 +128,60 @@ void main() {
     );
     expect(profile.first.kind, WorkoutSegmentKind.warmup);
     expect(profile.last.kind, WorkoutSegmentKind.cooldown);
+  });
+
+  test('calendar reconciliation deletes owned events before recreating them',
+      () async {
+    FlutterSecureStorage.setMockInitialValues({
+      'intervals_athlete_id': 'i123',
+      'intervals_api_key': 'private-key',
+    });
+    final methods = <String>[];
+    final service = IntervalsIcuService(client: MockClient((request) async {
+      methods.add('${request.method} ${request.url.path}');
+      return http.Response(request.method == 'PUT' ? '1' : '[{}]', 200);
+    }));
+    final delivered = await service.replacePlannedWorkouts(
+      [
+        IntervalsPlannedWorkout(
+          externalId: 'cycleready-2026-09-04',
+          day: DateTime(2026, 9, 4),
+          name: 'CycleReady - Endurance',
+          description: '- 60m 66%',
+          durationSeconds: 3600,
+        ),
+      ],
+      ownedExternalIds: const ['cycleready-2026-09-04'],
+    );
+    expect(delivered, 1);
+    expect(methods, [
+      'PUT /api/v1/athlete/i123/events/bulk-delete',
+      'POST /api/v1/athlete/i123/events/bulk',
+    ]);
+  });
+
+  test('calendar read maps stable external IDs for reconciliation', () async {
+    FlutterSecureStorage.setMockInitialValues({
+      'intervals_athlete_id': 'i123',
+      'intervals_api_key': 'private-key',
+    });
+    final service = IntervalsIcuService(client: MockClient((request) async {
+      expect(request.url.queryParameters['oldest'], '2026-09-04');
+      expect(request.url.queryParameters['newest'], '2026-09-10');
+      return http.Response(
+        '[{"id":42,"category":"WORKOUT","external_id":"cycleready-2026-09-04",'
+        '"start_date_local":"2026-09-04T00:00:00","name":"CycleReady - Endurance",'
+        '"description":"- 60m 66%","planned_duration":3600}]',
+        200,
+      );
+    }));
+
+    final workouts = await service.fetchPlannedWorkouts(
+      oldest: DateTime(2026, 9, 4),
+      newest: DateTime(2026, 9, 10),
+    );
+    expect(workouts.single.providerId, '42');
+    expect(workouts.single.workout.externalId, 'cycleready-2026-09-04');
+    expect(workouts.single.workout.durationSeconds, 3600);
   });
 }

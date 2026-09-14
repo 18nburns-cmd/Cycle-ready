@@ -1,107 +1,422 @@
-# CycleReady delivery tasks
+# CycleReady Engineering Backlog — Coaching Loop v3
 
-This list was restored on 24 August 2026 by auditing the current codebase
-against `PRODUCT_SPEC.md` and `ARCHITECTURE.md`. Tasks are ordered so later
-coaching work can rely on stable athlete data and domain boundaries.
+This backlog contains only work that remains after the completed v2 foundation.
+It is ordered by dependency and value for CycleReady's single-athlete use case.
+The governing product and architecture contracts remain `PRODUCT_SPEC.md` and
+`ARCHITECTURE.md`.
 
-## Current priority
+## Working rules
 
-- [x] Add a dedicated responsive Flutter web entry point and dashboard shell
-      that remains buildable despite Android-only health and device plugins.
+- Complete the first unchecked task before starting another task.
+- Keep each change inside the UI -> controller -> domain -> repository -> data
+  source dependency direction.
+- Add or update tests with every behavior change; never defer a broken suite.
+- Update product and architecture documentation in the same task when their
+  contracts change.
+- Never expose provider credentials or commit secrets.
+- Do not commit unless the user explicitly requests it.
 
-- [x] Add authenticated cloud storage so Android and web can share the same
-      athlete, activity, wellness, nutrition and coaching data.
+## EPIC 1 — Canonical Workout Catalogue
 
-- [x] Validate the first authenticated phone upload without exposing one
-      athlete's cloud snapshot to another account.
+Goal: replace parallel workout definitions with one versioned domain catalogue
+used by planning, ad-hoc selection, analysis and delivery.
 
-- [x] Deploy the configured release dashboard to a stable HTTPS address and
-      validate its first authenticated web read. GitHub Pages release 9 was
-      verified with the athlete's account and synced headline metrics on
-      25 August 2026.
+- [x] Define a provider-neutral `WorkoutFamily`, `WorkoutVariant` and
+      `WorkoutProgression` domain contract with stable identifiers.
+- [x] Add explicit cadence, terrain, equipment, adaptation, recovery-time and
+      success-criteria fields to the canonical workout contract.
+- [x] Model warm-up, work, recovery and cool-down steps without parsing display
+      titles or prescription strings.
+- [x] Create a catalogue repository interface supporting family, phase,
+      duration and equipment queries.
+- [x] Implement the local catalogue repository by adapting the existing
+      generated workout library without duplicating workout definitions.
+- [x] Add versioned Supabase catalogue tables and athlete-safe read policies.
+- [x] Seed the server catalogue deterministically from canonical workout IDs.
+- [x] Add progression and regression links for every supported workout family.
+- [x] Add duration variants for short, standard and extended training windows.
+- [x] Add domain validation for step duration, power range, cadence, recovery
+      and total workout duration.
+- [x] Add unit tests proving stable IDs, complete family coverage and valid
+      progression graphs.
+- [x] Add migration tests proving catalogue deployment is repeatable and does
+      not alter athlete-owned plan history.
+- [x] Update `PRODUCT_SPEC.md` and `ARCHITECTURE.md` with the canonical catalogue
+      ownership and versioning rules.
 
-- [x] Replace the web placeholders with responsive Today, Performance,
-      Calendar, Wellness and Nutrition views backed by the authenticated
-      athlete snapshot, including ride metrics, FTP, power-to-weight, recovery,
-      check-ins, body trends, planned sessions and daily intake progress.
+## EPIC 2 — Contextual Workout Selection
 
-- [x] Add chunked cloud storage for second-by-second activity samples so web
-      ride charts can load detailed power, heart-rate and cadence traces.
-      Supabase RLS, Android upload and lazy web power, heart-rate, cadence,
-      elevation and route views were validated end to end on 25 August 2026.
+Goal: make every workout choice reflect the athlete, plan purpose and available
+time rather than rotating through generic choices.
 
-- [x] Remove duplicate connected-service sync status from Today while keeping
-      full status and manual retry controls in Connect.
+- [x] Define an immutable workout-selection context containing athlete state,
+      goal, phase, weekly intent, recent load, recovery, availability,
+      equipment, weather and learned response.
+- [x] Move unplanned-day choice construction behind a domain selection service.
+- [x] Replace date-based best-fit rotation with evidence-based candidate
+      scoring from the canonical selection context.
+- [x] Include the current block adaptation target in candidate scoring.
+- [x] Include power-duration capability gaps in candidate scoring.
+- [x] Include family-specific historical success and recovery cost in scoring.
+- [x] Apply planned hard-session spacing across both completed and future work.
+- [x] Apply available-time and indoor/outdoor constraints before ranking.
+- [x] Return explicit score components, confidence and rejection reasons for
+      every evaluated candidate.
+- [x] Add a workout-browser controller with family and duration filters while
+      keeping unsafe candidates unavailable.
+- [x] Update the empty-day picker to group variants by adaptation and show why
+      the recommended session outranks alternatives.
+- [x] Add unit tests for selection ranking, safety exclusion, missing evidence
+      and deterministic tie-breaking.
+- [x] Add widget tests for browsing, filtering and selecting a safe workout.
+- [x] Update product and architecture documentation for contextual selection.
 
-- [x] Cache successful preferred-time weather forecasts for offline display,
-      expose updated/stale status on Today and prevent stale forecasts from
-      silently changing adaptive outdoor workouts.
+## EPIC 3 — Autonomous Daily Coaching Pipeline
 
-- [x] Add real SQLite migration-fixture tests for pre-profile-expansion schema
-      17 and pre-weather-profile schema 19, proving current upgrades preserve
-      athlete identity, physiology, rides and existing location data.
+## User-requested delivery â€” Searchable Food and Drink Catalogue
 
-- [x] Harden automatic connected-service sync with persisted exponential
-      retry, restart-safe next-attempt scheduling and visible Today status with
-      a manual retry that does not discard existing offline data.
+- [x] Define immutable food/drink and serving-scaling domain models.
+- [x] Add a repository boundary for text and barcode catalogue lookup.
+- [x] Add on-device EAN/UPC barcode scanning and automatic product lookup.
+- [x] Route found products through portion scaling, logging and favourites.
+- [x] Explain unknown barcodes and preserve name/label entry fallbacks.
+- [x] Bundle common foods, drinks and cycling fuel for offline use.
+- [x] Integrate read-only branded-product search with graceful offline fallback.
+- [x] Add searchable browsing with automatic nutrition values.
+- [x] Scale nutrition to the selected portion and support existing favourites.
+- [x] Add unit and widget coverage and update product/architecture documentation.
 
-- [x] Compare matched structured-workout steps with completed power samples;
-      report interval completion, target accuracy and late-session fade in the
-      persisted post-ride coaching report only when sample coverage is adequate.
+Goal: produce the day's authoritative recommendation on the server even when
+the phone is closed.
 
-- [x] Show the preferred-time outdoor forecast on Today and let the athlete
-      choose a cautious, balanced or resilient riding-safety profile that the
-      adaptive planner uses when deciding whether to move a ride indoors.
+- [x] Define a versioned server-side daily coaching input and output contract.
+- [x] Add an idempotent database function that assembles one athlete-day
+      context from authoritative relational records.
+- [x] Implement a server-side orchestration function that runs readiness,
+      candidate selection, safety checks and adaptive decision processing.
+- [x] Persist the exact evidence snapshot used by each daily recommendation.
+- [x] Add a per-athlete, per-day idempotency key preventing duplicate decisions.
+- [x] Schedule morning coaching execution in the athlete's configured timezone.
+- [x] Re-run the pipeline only when material same-day evidence changes.
+- [x] Add failure isolation and retry state without blocking data imports.
+- [x] Expose last-run, next-run, model-version and failure status through a
+      repository contract.
+- [x] Update Android Today to consume the authoritative daily recommendation
+      with an explicit offline fallback state.
+- [x] Update web Today to consume the same recommendation contract.
+- [x] Add contract tests comparing server and Dart safety outcomes for shared
+      golden scenarios.
+- [x] Add Edge Function integration tests for idempotency, timezone boundaries
+      and retry behavior.
+- [x] Document pipeline ownership, scheduling and fallback behavior.
 
-- [x] Add a coaching-grade rolling 12-week seasonal review that compares the
-      current block with the preceding block across load, consistency,
-      recovery and body-weight trends, with confidence and next priorities.
+## User-requested delivery — Ride Review and Recovery Feedback
 
-- [x] Match imported rides to planned workouts using date proximity, session
-      name, duration and load; use the match for compliance learning and
-      persisted post-ride coaching reports.
+- [x] Define conservative near-duplicate ride matching with explainable scores.
+- [x] Scan stored activities and expose possible duplicate pairs through a repository.
+- [x] Flag possible duplicates for athlete review without deleting either ride automatically.
+- [x] Add regression coverage proving completed-ride deletion recalculates recovery and preserves tombstones.
+- [x] Prompt for the short post-ride quiz after a newly imported recent ride.
+- [x] Feed post-ride effort, leg fatigue and discomfort into recovery-time estimation.
+- [x] Add unit and widget coverage and document duplicate-review and feedback behavior.
 
-- [x] Add weather-aware outdoor planning through a replaceable forecast
-      service, athlete training location and deterministic riding-safety rules.
+## User-requested repair — Authoritative Today Coaching
 
-- [x] Move learned workout-response persistence and coaching-decision
-      processing behind a coaching repository; expose domain snapshots to the
-      workout explanation and daily coaching context.
+- [x] Trace Flutter configuration, authentication, recommendation read and fallback activation.
+- [x] Invoke the production coaching endpoint when today's stored recommendation is absent.
+- [x] Authenticate app requests and enforce athlete ownership in the Edge Function.
+- [x] Parse the direct Edge response through the same Flutter recommendation contract.
+- [x] Log endpoint, identity, status, timeout, response and parsing failures.
+- [x] Verify the deployed endpoint is active, reachable and rejects unauthenticated requests.
+- [x] Document that FCM is notification transport rather than coaching authority.
+- [x] Align the adaptive-decision database constraint with all seven
+      intent-preserving fallback levels and validate production recovery.
 
-- [x] Remove direct database reads from the training-plan presentation layer;
-      obtain athlete targets and training preferences through feature providers.
+## User-requested refinement — Coaching and Ride Screen Clarity
 
-- [x] Move body-composition persistence behind a domain repository and keep
-      manual, Bluetooth, CSV and Health Connect writes synchronized with the
-      athlete profile as the single source of current weight.
+- [x] Remove the prominent possible-duplicate warning from the Rides dashboard.
+- [x] Hide the redundant authoritative-sync success card while preserving checking and fallback warnings.
+- [x] Prevent a small rebuilding seven-day load from flattening a ready athlete's future plan into recovery rides.
+- [x] Add regression tests and update product and architecture documentation.
+- [x] Bound detailed ride-sample uploads to one chunk per HTTP request after a repeatable Android TLS failure.
+- [x] Encode the athlete's Monday easy, Wednesday/Saturday quality and Sunday long-ride microcycle with safety overrides.
 
-- [x] Move goal-event persistence to a coaching domain entity and repository;
-      use it from the goal screen, adaptive planner and daily coaching context.
+## User-requested delivery — Private Multi-User Accounts
 
-- [x] Move planned-session and training-preference persistence behind a
-      coaching repository so calendar providers/controllers do not construct
-      Drift companions or query those tables directly.
+Goal: allow the same private CycleReady build to serve separate people while
+keeping every athlete's health, training and integration data isolated.
 
-- [x] Expand the athlete profile with bike/equipment, power-meter and trainer
-      availability, preferred ride time, nutrition preferences and injury notes;
-      prevent indoor-only planning when no trainer is available.
+- [x] Add registration, login, logout and end-to-end password recovery.
+- [x] Bootstrap exactly one athlete record for every authenticated user.
+- [x] Replace global single-athlete cloud lookups with an authenticated owner resolver.
+- [x] Erase local health, training and provider data securely on logout.
+- [x] Prevent a new account from inheriting another account's pending local mutations.
+- [x] Scope events, plans, readiness, activities, nutrition and coaching history to the resolved athlete.
+- [x] Verify Intervals.icu OAuth credentials and workout outbox ownership per athlete.
+- [x] Register notifications and background coaching independently per athlete and timezone.
+- [x] Add authenticated cloud-account deletion with provider revocation and local erasure.
+- [x] Add multi-user RLS, cross-account denial and logout-cache integration tests.
+- [x] Add a signed private APK release channel with version checking and documented updates.
+- [ ] Update operating and privacy documentation and validate two physical-phone accounts.
 
-- [x] Expand the athlete profile as the single source of truth: persist and edit
-      identity, core physiology and experience alongside existing FTP/load data.
-- [x] Move athlete profile persistence behind a feature repository and controller
-      so presentation code no longer accesses Drift directly.
-- [x] Build a structured daily coaching context that combines athlete profile,
-      readiness, recent rides, goal phase, availability and learned response.
-- [x] Refresh future adaptive workout targets automatically when FTP changes,
-      without modifying completed or manually planned sessions.
-- [x] Add confidence and evidence fields to every generated daily workout
-      recommendation and expose them consistently in the UI.
-- [x] Add after-ride comparison against the planned workout with an explicit
-      tomorrow recommendation persisted in coaching history.
-- [x] Refresh `README.md` and `docs/ROADMAP.md` to describe the current product
-      rather than the original foundation increment.
+## User-requested delivery — Adaptation-First Strategic Planning
 
-## Quality baseline
+Goal: select the physiological adaptation from event demands, capability gaps,
+phase and block intent before selecting or adapting a structured workout.
 
-- [x] `flutter analyze` completes without warnings.
-- [x] Full test suite passes (242 tests on 25 August 2026).
+- [x] Define immutable event-demand, athlete-capability, capability-gap,
+      dynamic-phase and strategic training-block domain contracts.
+- [x] Add a configurable event-demand model using event type, distance,
+      expected duration, elevation and terrain.
+- [x] Build a phase-aware weighted workout-family eligibility pool driven by
+      primary, secondary and maintenance adaptations.
+- [x] Persist the expanded capability dimensions, Foundation phase, block
+      duration bounds, progression status and completion criteria.
+- [x] Replace fixed server phase allocation with demand-and-gap-aware dynamic
+      phase and block selection.
+- [x] Make weekly plans select primary, secondary and maintenance adaptation
+      objectives before assigning workouts.
+- [x] Restrict authoritative server candidate ranking to the eligible family
+      pool and log every exclusion and score component.
+- [x] Implement the intent-preserving adaptation hierarchy from same-workout
+      dose reduction through rest.
+- [ ] Require achieved, absorbed and repeated comparable evidence before any
+      upward workout progression.
+- [ ] Recalculate missed-session microcycles without shifting training debt or
+      creating unsafe hard-session density.
+- [ ] Add block completion decisions for continue, progress, extend, end,
+      deload and rebuild.
+- [ ] Persist strategic-decision evidence, reason codes, confidence and model
+      version for every selected workout.
+- [x] Align Flutter's offline fallback with the shared strategic contract while
+      retaining the server as coaching authority.
+- [ ] Add automated scenarios A–L from the planning-engine specification.
+- [ ] Add parity tests for server and Dart phase, eligibility and safety
+      outcomes.
+- [ ] Document operational logging and the full adaptation-first decision
+      trace.
+
+## User-requested delivery — Multi-Event Planning and Plan Convergence
+
+- [x] Replace the single local event assumption with a stable multi-event
+      repository while preserving the existing event.
+- [x] Add event-calendar create, edit and individually confirmed delete actions.
+- [x] Select the primary planning event by A/B/C priority and date while
+      retaining intervening events in generated plans.
+- [x] Synchronize multiple events idempotently to authoritative Supabase goals.
+- [x] Automatically synchronize every accepted adaptive-plan rebuild.
+- [x] Preserve server planned-session identity so changed workouts enqueue
+      idempotent Intervals.icu updates rather than duplicate creates.
+- [x] Add repository, migration and delivery-regression tests.
+- [x] Update product and architecture documentation.
+
+## EPIC 4 — Reliable Workout Delivery and Reconciliation
+
+Goal: ensure the workout shown in CycleReady is the workout available to ride,
+and make any delivery failure visible and recoverable.
+
+- [x] Add a delivery-state domain model covering pending, delivered, updated,
+      deleted, failed and externally diverged states.
+- [x] Persist provider workout IDs, content hashes, delivery attempts and last
+      acknowledged versions for each planned session.
+- [x] Add an outbox repository for idempotent workout create, update and delete
+      operations.
+- [x] Queue delivery automatically when an adaptive or athlete-selected workout
+      is confirmed.
+- [x] Queue provider updates whenever a future delivered workout changes.
+- [x] Queue provider deletion when a future CycleReady workout is removed.
+- [x] Prevent completed or non-CycleReady provider entries from being deleted.
+- [x] Reconcile the CycleReady calendar against Intervals.icu using stable IDs
+      and content hashes.
+- [x] Surface stale, failed and externally modified workouts in the calendar.
+- [x] Add a per-workout retry action and a safe bulk “sync future workouts”
+      action.
+- [x] Deploy an idempotent scheduled delivery worker and converge phone-created plans before delivery.
+- [x] Unify phone and server Intervals.icu external IDs and repair legacy duplicate future workouts idempotently.
+- [ ] Add provider-neutral FIT and ZWO file exporters from structured steps.
+- [ ] Add Android share/export actions for manual Garmin, MyWhoosh or trainer
+      import where direct APIs are unavailable.
+- [ ] Add unit tests for outbox idempotency and reconciliation decisions.
+- [ ] Add mocked-provider integration tests for create/update/delete ordering
+      and partial failure recovery.
+- [ ] Add widget tests for delivery state, retry and manual export flows.
+- [ ] Validate one production update and deletion round trip through
+      Intervals.icu without affecting completed workouts.
+- [ ] Document supported delivery routes and the Garmin/MyWhoosh limitations.
+
+## EPIC 5 — Plan Editing and Change Transparency
+
+Goal: let the athlete safely adjust real-life scheduling while preserving the
+coach's intent and making adaptations understandable.
+
+- [ ] Define domain commands for move, swap, shorten, skip and restore-plan
+      operations.
+- [ ] Add safety validation for moving workouts across hard-session and recovery
+      constraints.
+- [ ] Preserve the original prescription and reason for every athlete-initiated
+      plan change.
+- [ ] Implement drag-or-select rescheduling in the Android calendar.
+- [ ] Add “swap workout” using only safe same-purpose catalogue candidates.
+- [ ] Add “less time available” variants that preserve the primary adaptation.
+- [ ] Add an undo window for future plan edits and deletions.
+- [ ] Show a concise athlete-facing explanation of what changed and why.
+- [ ] Synchronize accepted edits through the delivery outbox.
+- [ ] Add domain tests for each edit command and constraint violation.
+- [ ] Add widget tests for move, swap, shorten, skip and undo interactions.
+- [ ] Document athlete overrides and immutable coaching-history behavior.
+
+## EPIC 6 — Closed-Loop Session Learning
+
+Goal: learn which prescriptions work for this athlete without overreacting to
+single sessions or confusing correlation with evidence.
+
+- [ ] Define comparable-session cohorts by workout family, structure, phase and
+      environmental context.
+- [ ] Persist prescribed dose, achieved dose and delayed recovery response under
+      one attributable session-outcome contract.
+- [ ] Add data-quality gates for power, heart-rate, subjective and recovery
+      evidence before learning updates.
+- [ ] Estimate family-specific completion, stimulus and recovery-cost baselines.
+- [ ] Learn separate duration and intensity tolerances for each workout family.
+- [ ] Learn heat, poor-sleep and low-carbohydrate response modifiers only after
+      sufficient repeated evidence.
+- [ ] Add confidence decay for stale evidence and confidence growth for repeated
+      comparable outcomes.
+- [ ] Constrain every learned dose adjustment to a documented safe step size.
+- [ ] Feed learned family response into contextual workout ranking.
+- [ ] Show the athlete which repeated outcomes caused a progression, hold or
+      reduction.
+- [ ] Add golden tests proving one anomalous ride cannot materially change the
+      model.
+- [ ] Add longitudinal tests for progression, regression, stale evidence and
+      conflicting signals.
+- [ ] Add repository tests for attribution and exactly-once learning updates.
+- [ ] Document learning thresholds, confidence and safety bounds.
+
+## EPIC 7 — Richer Ride Coaching
+
+Goal: turn each completed ride into specific, actionable coaching rather than a
+generic metric summary.
+
+- [ ] Add structured cadence execution analysis for prescribed cadence ranges.
+- [ ] Add interval-level heart-rate response and recovery analysis where data
+      coverage is adequate.
+- [ ] Add climbing-segment pacing analysis using gradient and elevation samples.
+- [ ] Add sprint repeatability and peak-power fade analysis.
+- [ ] Add fuelling-plan adherence input to the post-ride check-in.
+- [ ] Compare planned versus reported fuelling for long and demanding rides.
+- [ ] Generate family-specific positives and improvement cues from validated
+      session evidence.
+- [ ] Link each improvement cue to the next relevant workout prescription.
+- [ ] Add insufficient-data explanations for every new analysis dimension.
+- [ ] Add unit tests for cadence, heart-rate, climbing, sprint and fuelling
+      analysis with incomplete-data cases.
+- [ ] Add widget tests for the expanded post-ride coaching report.
+- [ ] Update ride-analysis documentation and evidence requirements.
+
+## EPIC 8 — Proactive Recovery and Nutrition Coaching
+
+Goal: turn recovery and nutrition records into timely actions tied to planned
+training demand.
+
+- [ ] Define a daily recovery-action domain model with priority, confidence,
+      expiry and supporting evidence.
+- [ ] Generate sleep, hydration, mobility and rest actions from tomorrow's
+      workout and current recovery state.
+- [ ] Define pre-ride, during-ride and post-ride fuelling prescriptions from
+      workout duration and intensity.
+- [ ] Adjust carbohydrate and hydration targets for forecast temperature and
+      expected sweat demand.
+- [ ] Add athlete-configurable reminder windows and quiet hours.
+- [ ] Schedule server notifications for time-sensitive recovery and fuelling
+      actions.
+- [ ] Mark actions completed, dismissed or no longer relevant without changing
+      historical coaching evidence.
+- [ ] Feed adherence into learning only after sufficient repeated observations.
+- [ ] Add unit tests for action priority, expiry, weather adjustment and missing
+      evidence.
+- [ ] Add notification integration tests for timezone and quiet-hour behavior.
+- [ ] Add widget tests for completing and dismissing daily actions.
+- [ ] Document proactive-action and notification semantics.
+
+## EPIC 9 — Goal Strategy and Forecasting
+
+Goal: show whether current training is closing the gap to the target event and
+what trade-offs matter most.
+
+- [ ] Extend event demands with terrain, duration, elevation, intensity pattern
+      and fuelling requirements.
+- [ ] Add an athlete-facing editor for event-demand assumptions.
+- [ ] Map event demands to capability targets with evidence confidence.
+- [ ] Calculate goal readiness from current capabilities rather than plan
+      completion alone.
+- [ ] Forecast capability and fitness ranges to the event date with uncertainty.
+- [ ] Detect when remaining availability makes the original goal unrealistic.
+- [ ] Generate conservative “stay course”, “reduced load” and “more time”
+      scenarios without mutating the plan.
+- [ ] Show the main capability gaps and the blocks intended to close them.
+- [ ] Add unit tests for demand mapping, readiness and uncertainty bounds.
+- [ ] Add widget tests for scenario comparison and event-gap explanations.
+- [ ] Document goal-readiness assumptions and non-guarantee language.
+
+## EPIC 10 — Observability, Data Quality and Resilience
+
+Goal: make failures diagnosable and prevent stale or contradictory data from
+quietly influencing coaching.
+
+- [ ] Define typed data-freshness and provenance status for every coaching input.
+- [ ] Add server checks for duplicate, stale, implausible and conflicting source
+      records.
+- [ ] Exclude quarantined records from derived metrics while retaining them for
+      diagnosis.
+- [ ] Add a private sync-health screen showing source freshness, last success,
+      queued mutations and delivery failures.
+- [ ] Add structured correlation IDs across import, processing, decision and
+      delivery jobs.
+- [ ] Add privacy-safe server logs and bounded retention for operational events.
+- [ ] Add alerting for repeated pipeline, notification and delivery failures.
+- [ ] Add database indexes verified against the main athlete timeline queries.
+- [ ] Add pagination and lazy sample loading for long activity histories.
+- [ ] Add integration tests for stale-data exclusion and pipeline traceability.
+- [ ] Add performance tests for multi-year activity history and sample loading.
+- [ ] Document operational troubleshooting and recovery procedures.
+
+## EPIC 11 — Quality Gates and Release Safety
+
+Goal: keep autonomous coaching changes safe as the system becomes more capable.
+
+- [ ] Create anonymized golden athlete timelines for normal training, overload,
+      illness, taper and missing-data scenarios.
+- [ ] Run the same golden timelines through Dart and server coaching engines.
+- [ ] Add invariant tests preventing unsafe intensity, excessive recovery chains
+      and post-event plan leakage.
+- [ ] Add end-to-end tests from imported ride through analysis, learning,
+      next-day decision and provider delivery.
+- [ ] Add migration rollback guidance and forward-recovery tests for every new
+      server schema change.
+- [ ] Add automated checks that secrets and private athlete data are absent from
+      build artifacts and logs.
+- [ ] Add Android smoke tests for upgrade-with-data-preservation.
+- [ ] Add web smoke tests for authenticated relational reads and responsive
+      navigation.
+- [ ] Establish a reproducible release checklist covering tests, analysis,
+      Android build, web build, migration status and phone installation.
+- [ ] Record the verified test count and production validation date after each
+      release milestone.
+- [ ] Update `PRODUCT_SPEC.md`, `ARCHITECTURE.md`, `ROADMAP.md` and operational
+      documentation when this backlog is completed.
+
+## Deferred beyond this backlog
+
+Voice coaching, live ride control, direct smart-trainer control, computer-vision
+bike fit, coach marketplace and team accounts remain intentionally deferred.
+They add less value to the current single-athlete coaching loop than the work
+above and require separate product approval before entering the engineering
+backlog.
+
+## Definition of done
+
+A task is complete only when its implementation, relevant automated tests,
+documentation and backlog checkbox agree; analysis is clean; external inputs
+are validated; secrets remain outside source control; and no known regression
+or unexplained coaching behavior has been introduced.

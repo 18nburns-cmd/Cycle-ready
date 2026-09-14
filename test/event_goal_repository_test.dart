@@ -43,7 +43,7 @@ void main() {
     await repository.saveGoal(
       CoachingEventGoal(
         name: 'Club TT',
-        eventDate: DateTime(2026, 9, 1),
+        eventDate: DateTime(2026, 10, 1),
         distanceKm: 16.1,
         elevationMetres: 100,
         priority: 'B',
@@ -57,11 +57,48 @@ void main() {
     final values = <CoachingEventGoal?>[];
     final subscription = repository.watchGoal().listen(values.add);
     await Future<void>.delayed(Duration.zero);
-    await repository.deleteGoal();
+    final saved = await repository.getGoals();
+    await repository.deleteGoal(saved.single.id!);
     await Future<void>.delayed(Duration.zero);
     await subscription.cancel();
 
     expect(values.first?.name, 'Club TT');
     expect(values.last, isNull);
+  });
+
+  test('stores multiple events and deletes only the selected event', () async {
+    for (final event in [
+      CoachingEventGoal(
+        name: 'Autumn TT',
+        eventDate: DateTime(2026, 10, 1),
+        distanceKm: 16,
+        elevationMetres: 100,
+        priority: 'B',
+        target: 'targetTime',
+        terrain: 'flat',
+        availableDays: 4,
+        longRideMinutes: 180,
+      ),
+      CoachingEventGoal(
+        name: 'Summer A race',
+        eventDate: DateTime(2027, 8, 1),
+        distanceKm: 160,
+        elevationMetres: 2200,
+        priority: 'A',
+        target: 'race',
+        terrain: 'mountainous',
+        availableDays: 4,
+        longRideMinutes: 300,
+      ),
+    ]) {
+      await repository.saveGoal(event);
+    }
+
+    final goals = await repository.getGoals();
+    expect(goals, hasLength(2));
+    expect((await repository.getGoal())?.name, 'Summer A race');
+
+    await repository.deleteGoal(goals.first.id!);
+    expect((await repository.getGoals()).single.name, 'Summer A race');
   });
 }

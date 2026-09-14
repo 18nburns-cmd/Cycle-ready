@@ -36,6 +36,52 @@ void main() {
         contains('200–210 W'));
   });
 
+  test('four-day coaching week places easy, quality, quality and long work',
+      () {
+    final plan = generator.generate(
+      start: DateTime(2026, 9, 14),
+      goal: TrainingGoal.generalFitness,
+      daysPerWeek: 4,
+      longRideWeekday: DateTime.sunday,
+      ftp: 200,
+      currentWeeklyLoad: 10,
+      readiness: 84,
+      horizonDays: 7,
+    );
+
+    final byDay = {for (final workout in plan) workout.day.weekday: workout};
+    expect(byDay.keys, {
+      DateTime.monday,
+      DateTime.wednesday,
+      DateTime.saturday,
+      DateTime.sunday,
+    });
+    expect(byDay[DateTime.monday]!.type, SessionType.endurance);
+    expect(byDay[DateTime.monday]!.title, startsWith('Endurance'));
+    expect(byDay[DateTime.wednesday]!.type, SessionType.intervals);
+    expect(byDay[DateTime.saturday]!.type, SessionType.intervals);
+    expect(byDay[DateTime.sunday]!.type, SessionType.endurance);
+    expect(byDay[DateTime.sunday]!.durationMinutes,
+        greaterThan(byDay[DateTime.monday]!.durationMinutes));
+  });
+
+  test('recovery safety can override four-day quality placement', () {
+    final plan = generator.generate(
+      start: DateTime(2026, 9, 14),
+      goal: TrainingGoal.generalFitness,
+      daysPerWeek: 4,
+      longRideWeekday: DateTime.sunday,
+      ftp: 200,
+      currentWeeklyLoad: 300,
+      readiness: 30,
+      horizonDays: 7,
+    );
+
+    expect(plan.first.type, SessionType.recovery);
+    expect(plan[1].day.weekday, DateTime.wednesday);
+    expect(plan[1].type, SessionType.recovery);
+  });
+
   test('low readiness produces recovery work', () {
     final plan = generator.generate(
       start: DateTime(2026, 7, 27),
@@ -46,7 +92,52 @@ void main() {
       currentWeeklyLoad: 250,
       readiness: 30,
     );
-    expect(plan.every((item) => item.type == SessionType.recovery), isTrue);
+    expect(plan.take(2).every((item) => item.type == SessionType.recovery),
+        isTrue);
+    expect(plan[2].type, SessionType.endurance);
+  });
+
+  test('a small rebuilding load does not flatten a ready plan into recovery',
+      () {
+    final plan = generator.generate(
+      start: DateTime(2026, 9, 11),
+      goal: TrainingGoal.generalFitness,
+      daysPerWeek: 4,
+      longRideWeekday: DateTime.sunday,
+      ftp: 200,
+      currentWeeklyLoad: 10,
+      readiness: 84,
+      horizonDays: 7,
+    );
+
+    expect(plan, hasLength(4));
+    expect(plan.where((item) => item.type == SessionType.recovery).length,
+        lessThanOrEqualTo(1));
+    expect(
+      plan.where((item) => item.type != SessionType.recovery),
+      hasLength(greaterThanOrEqualTo(3)),
+    );
+  });
+
+  test('today low readiness protects only the next two planned sessions', () {
+    final plan = const AdaptivePlanGenerator().generate(
+      start: DateTime(2026, 9, 8),
+      goal: TrainingGoal.ftp,
+      daysPerWeek: 6,
+      longRideWeekday: DateTime.sunday,
+      ftp: 250,
+      currentWeeklyLoad: 300,
+      readiness: 30,
+      horizonDays: 14,
+    );
+
+    expect(
+        plan.take(2).every((workout) => workout.type == SessionType.recovery),
+        isTrue);
+    expect(
+      plan.skip(2).any((workout) => workout.type != SessionType.recovery),
+      isTrue,
+    );
   });
 
   test('never schedules dates before requested start', () {
@@ -76,11 +167,13 @@ void main() {
       rampRate: 11,
     );
 
-    expect(plan.every((item) => item.type == SessionType.recovery), isTrue);
+    expect(plan.take(2).every((item) => item.type == SessionType.recovery),
+        isTrue);
+    expect(plan[2].type, SessionType.endurance);
   });
 
   test('a demanding previous day prevents another hard session', () {
-    final protectedDay = DateTime(2026, 7, 28);
+    final protectedDay = DateTime(2026, 7, 29);
     final plan = generator.generate(
       start: DateTime(2026, 7, 27),
       goal: TrainingGoal.ftp,
@@ -116,7 +209,7 @@ void main() {
   });
 
   test('post-ride discomfort forces the protected day to recovery', () {
-    final protectedDay = DateTime(2026, 7, 28);
+    final protectedDay = DateTime(2026, 7, 29);
     final plan = generator.generate(
       start: DateTime(2026, 7, 27),
       goal: TrainingGoal.ftp,
@@ -196,7 +289,8 @@ void main() {
     );
 
     expect(plan, isNotEmpty);
-    expect(plan.every((item) => item.day.weekday == DateTime.wednesday), isTrue);
+    expect(
+        plan.every((item) => item.day.weekday == DateTime.wednesday), isTrue);
     expect(plan.every((item) => item.durationMinutes <= 45), isTrue);
     expect(plan.every((item) => item.startMinutes == 17 * 60 + 30), isTrue);
     expect(plan.every((item) => item.setting == RideSetting.indoor), isTrue);
@@ -207,7 +301,7 @@ void main() {
     expect(plan.first.title, contains('min'));
   });
 
-  test('four-week block progresses before a recovery week', () {
+  test('four-week block progresses without forcing recovery by date', () {
     final plan = generator.generate(
       start: DateTime(2026, 8, 24),
       goal: TrainingGoal.endurance,
@@ -220,14 +314,13 @@ void main() {
     final weekThree = plan.where((item) =>
         !item.day.isBefore(DateTime(2026, 9, 7)) &&
         item.day.isBefore(DateTime(2026, 9, 14)));
-    final recoveryWeek = plan.where(
-        (item) => !item.day.isBefore(DateTime(2026, 9, 14)));
+    final fourthWeek =
+        plan.where((item) => !item.day.isBefore(DateTime(2026, 9, 14)));
     expect(weekThree, isNotEmpty);
-    expect(recoveryWeek, isNotEmpty);
-    expect(recoveryWeek.every((item) => item.type == SessionType.recovery),
-        isTrue);
-    expect(recoveryWeek.first.reason, contains('recovery week'));
-    expect(recoveryWeek.first.title, startsWith('Recovery ·'));
+    expect(fourthWeek, isNotEmpty);
+    expect(
+        fourthWeek.every((item) => item.type == SessionType.recovery), isFalse);
+    expect(fourthWeek.first.reason, isNot(contains('recovery week')));
   });
 
   test('FTP quality sessions progress their interval structure', () {
@@ -250,6 +343,71 @@ void main() {
     expect(titles, contains('Threshold · 3 × 12 min'));
   });
 
+  test('limits recovery to two consecutive sessions without an exception', () {
+    final plan = generator.generate(
+      start: DateTime(2026, 9, 1),
+      goal: TrainingGoal.generalFitness,
+      daysPerWeek: 6,
+      longRideWeekday: DateTime.sunday,
+      ftp: 250,
+      currentWeeklyLoad: 300,
+      readiness: 30,
+      horizonDays: 14,
+      recoveryDays: {
+        for (var offset = 0; offset < 14; offset++)
+          DateTime(2026, 9, 1 + offset),
+      },
+    );
+
+    var consecutive = 0;
+    for (final workout in plan) {
+      consecutive = workout.type == SessionType.recovery ? consecutive + 1 : 0;
+      expect(consecutive, lessThanOrEqualTo(2));
+    }
+    expect(
+        plan,
+        contains(predicate<AdaptiveWorkout>(
+          (workout) => workout.title.startsWith('Easy aerobic reset'),
+        )));
+  });
+
+  test('recovery limit evidence implements every physiological exception', () {
+    const exceptions = [
+      RecoveryDayLimitEvidence(consecutiveReadinessBelow45Days: 2),
+      RecoveryDayLimitEvidence(consecutiveHrvBelowBaselineDays: 3),
+      RecoveryDayLimitEvidence(consecutiveElevatedRestingHrDays: 3),
+      RecoveryDayLimitEvidence(illnessOrInjury: true),
+      RecoveryDayLimitEvidence(previousRecoveryCostScore: 81),
+    ];
+    for (final evidence in exceptions) {
+      expect(evidence.permitsExtendedRecovery, isTrue);
+    }
+    expect(
+      const RecoveryDayLimitEvidence(previousRecoveryCostScore: 80)
+          .permitsExtendedRecovery,
+      isFalse,
+    );
+  });
+
+  test('healthy training does not force a fourth-week recovery block', () {
+    final plan = generator.generate(
+      start: DateTime(2026, 9, 1),
+      goal: TrainingGoal.generalFitness,
+      daysPerWeek: 6,
+      longRideWeekday: DateTime.sunday,
+      ftp: 250,
+      currentWeeklyLoad: 300,
+      readiness: 80,
+      horizonDays: 28,
+    );
+    final fourthWeek = plan.where((workout) =>
+        workout.day.difference(DateTime(2026, 9, 1)).inDays ~/ 7 == 3);
+
+    expect(fourthWeek.length, greaterThan(2));
+    expect(fourthWeek.every((workout) => workout.type == SessionType.recovery),
+        isFalse);
+  });
+
   test('calendar dates stay at midnight across daylight-saving changes', () {
     final plan = generator.generate(
       start: DateTime(2026, 10, 17),
@@ -262,5 +420,28 @@ void main() {
       horizonDays: 21,
     );
     expect(plan.every((item) => item.day.hour == 0), isTrue);
+  });
+
+  test('event eleven months away does not create threshold-focused week', () {
+    final plan = generator.generate(
+      start: DateTime(2026, 9, 14),
+      goal: TrainingGoal.event,
+      daysPerWeek: 4,
+      longRideWeekday: DateTime.sunday,
+      ftp: 250,
+      currentWeeklyLoad: 400,
+      readiness: 85,
+      eventDate: DateTime(2027, 8, 12),
+      horizonDays: 7,
+    );
+
+    expect(
+      plan.where((workout) => workout.type == SessionType.intervals),
+      isEmpty,
+    );
+    expect(
+      plan.where((workout) => workout.type == SessionType.endurance).length,
+      greaterThanOrEqualTo(2),
+    );
   });
 }

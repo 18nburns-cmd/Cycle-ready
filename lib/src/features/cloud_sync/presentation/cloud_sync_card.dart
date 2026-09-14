@@ -3,6 +3,8 @@ import 'package:cycle_ready/src/features/cloud_sync/application/cloud_sync_contr
 import 'package:cycle_ready/src/features/cloud_sync/presentation/cloud_account_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cycle_ready/src/features/updates/application/app_release_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class CloudSyncCard extends ConsumerWidget {
   const CloudSyncCard({super.key});
@@ -38,6 +40,7 @@ class CloudSyncCard extends ConsumerWidget {
                 const CloudAccountButton(),
               ],
             ),
+            const _PrivateUpdateNotice(),
             const SizedBox(height: 12),
             Text(sync.hasError
                 ? 'Cloud upload failed safely: ${sync.error}'
@@ -68,6 +71,37 @@ class CloudSyncCard extends ConsumerWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _PrivateUpdateNotice extends ConsumerWidget {
+  const _PrivateUpdateNotice();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final release = ref.watch(appReleaseProvider);
+    final value = release.valueOrNull;
+    if (value == null || !value.updateAvailable) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: MaterialBanner(
+        content: Text(
+          'CycleReady ${value.latestVersion} is available. Your data is preserved when it is installed over this version.',
+        ),
+        actions: [
+          TextButton.icon(
+            onPressed: () => launchUrl(
+              value.downloadUrl,
+              mode: LaunchMode.externalApplication,
+            ),
+            icon: const Icon(Icons.system_update_alt),
+            label: const Text('Download update'),
+          ),
+        ],
       ),
     );
   }

@@ -83,6 +83,52 @@ void main() {
     expect(result.fatigue, greaterThan(result.fitness));
     expect(result.weeklyLoad, 100);
     expect(result.form, lessThan(0));
+    expect(result.ctl, result.fitness);
+    expect(result.atl, result.fatigue);
+    expect(result.tsb, result.ctl - result.atl);
+  });
+
+  test('detects overload only when multiple load signals agree', () {
+    const metrics = TrainingMetrics(
+      fitness: 50,
+      fatigue: 80,
+      form: -30,
+      weeklyLoad: 500,
+      rampRate: 9,
+      history: [],
+    );
+
+    expect(metrics.acuteChronicRatio, 1.6);
+    expect(metrics.condition, FitnessCondition.overtrainingRisk);
+    expect(metrics.loadWarning, contains('overload risk'));
+  });
+
+  test('detects detraining from falling CTL and low acute load', () {
+    const metrics = TrainingMetrics(
+      fitness: 50,
+      fatigue: 30,
+      form: 20,
+      weeklyLoad: 120,
+      rampRate: -3,
+      history: [],
+    );
+
+    expect(metrics.condition, FitnessCondition.detraining);
+    expect(metrics.loadWarning, contains('Chronic load is falling'));
+  });
+
+  test('does not label a new athlete with no CTL as detraining', () {
+    const metrics = TrainingMetrics(
+      fitness: 0,
+      fatigue: 0,
+      form: 0,
+      weeklyLoad: 0,
+      rampRate: 0,
+      history: [],
+    );
+
+    expect(metrics.acuteChronicRatio, isNull);
+    expect(metrics.condition, FitnessCondition.productive);
   });
 
   test('heart rate provides a fallback when power is unavailable', () {

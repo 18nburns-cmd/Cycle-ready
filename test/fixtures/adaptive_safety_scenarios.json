@@ -1,0 +1,42 @@
+[
+  {
+    "name": "healthy athlete may train",
+    "illness": false,
+    "injury": false,
+    "athlete_state": "GREEN",
+    "available_minutes": 90,
+    "expected": "CONTINUE"
+  },
+  {
+    "name": "illness overrides high readiness",
+    "illness": true,
+    "injury": false,
+    "athlete_state": "GREEN",
+    "available_minutes": 90,
+    "expected": "REST"
+  },
+  {
+    "name": "injury overrides high readiness",
+    "illness": false,
+    "injury": true,
+    "athlete_state": "GREEN",
+    "available_minutes": 90,
+    "expected": "REST"
+  },
+  {
+    "name": "red athlete state stops training",
+    "illness": true,
+    "injury": false,
+    "athlete_state": "RED",
+    "available_minutes": 90,
+    "expected": "REST"
+  },
+  {
+    "name": "no availability means rest",
+    "illness": false,
+    "injury": false,
+    "athlete_state": "GREEN",
+    "available_minutes": 0,
+    "expected": "REST"
+  }
+]
