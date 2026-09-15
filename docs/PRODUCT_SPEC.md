@@ -828,6 +828,10 @@ plan-row replacement or retry after a timeout cannot create duplicate workouts.
 Legacy UUID-keyed CycleReady events are removed during an idempotent repair
 before the newest prescription is upserted. Phone-created plans converge to the
 authoritative calendar, including scheduled time, before queued delivery.
+When OAuth is connected, the phone must not also write workouts through its
+optional API-key connection. Before an authoritative write, the server removes
+same-day legacy CycleReady events by their provider IDs, including copies made
+under the older API-key integration, while leaving unowned workouts untouched.
 CycleReady reconciles its future calendar with Intervals.icu by the stable
 external ID it assigned and a canonical content hash. Missing or externally
 edited workouts are detected without matching by title or touching entries

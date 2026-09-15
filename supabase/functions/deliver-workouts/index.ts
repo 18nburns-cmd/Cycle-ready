@@ -20,6 +20,72 @@ const sha256 = async (value: string): Promise<string> => {
 const message = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const eventDay = (event: Json): string =>
+  String(event.start_date_local ?? event.start_date ?? '').slice(0, 10);
+
+const cleanupLegacyCycleReadyEvents = async ({
+  authorization,
+  scheduledDate,
+  canonicalExternalId,
+  currentSessionId,
+  deleteCanonical,
+}: {
+  authorization: string;
+  scheduledDate: string;
+  canonicalExternalId: string;
+  currentSessionId: string;
+  deleteCanonical: boolean;
+}): Promise<number> => {
+  const url = new URL('https://intervals.icu/api/v1/athlete/0/events');
+  url.searchParams.set('oldest', scheduledDate);
+  url.searchParams.set('newest', scheduledDate);
+  const listed = await fetch(url, { headers: { Authorization: authorization } });
+  const listedBody = await listed.json().catch(() => null);
+  if (!listed.ok || !Array.isArray(listedBody)) {
+    throw new Error(
+      `Intervals.icu calendar reconciliation returned ${listed.status}`,
+    );
+  }
+  const configuredClientId = requiredEnv('INTERVALS_CLIENT_ID');
+  const candidates = listedBody.filter((value): value is Json => {
+    if (typeof value !== 'object' || value === null) return false;
+    const event = value as Json;
+    const externalId = String(event.external_id ?? '');
+    const name = String(event.name ?? '');
+    const ownedIdentity = externalId === canonicalExternalId ||
+      externalId === currentSessionId || uuidPattern.test(externalId);
+    return event.id != null && event.category === 'WORKOUT' &&
+      eventDay(event) === scheduledDate &&
+      name.startsWith('CycleReady - ') && ownedIdentity;
+  });
+  const deletions = candidates.filter((event) => {
+    if (deleteCanonical) return true;
+    const isAuthoritativeCanonical =
+      String(event.external_id ?? '') === canonicalExternalId &&
+      String(event.oauth_client_id ?? '') === configuredClientId;
+    return !isAuthoritativeCanonical;
+  }).map((event) => ({ id: event.id }));
+  if (deletions.length === 0) return 0;
+  const removed = await fetch(
+    'https://intervals.icu/api/v1/athlete/0/events/bulk-delete',
+    {
+      method: 'PUT',
+      headers: { Authorization: authorization, 'content-type': 'application/json' },
+      body: JSON.stringify(deletions),
+    },
+  );
+  const removedBody = await removed.text().catch(() => '');
+  if (!removed.ok) {
+    throw new Error(
+      `Intervals.icu duplicate cleanup returned ${removed.status}: ${removedBody.slice(0, 500)}`,
+    );
+  }
+  return deletions.length;
+};
+
 const description = (payload: Json): string => {
   const minutes = Number(payload.duration_minutes ?? 0);
   switch (String(payload.session_type ?? 'endurance')) {
@@ -90,6 +156,13 @@ Deno.serve(async (request) => {
         const legacyExternalId = String(deliveryResult.data.planned_session_id);
         let providerWorkoutId: string | null = null;
         let response: Response;
+        const duplicatesRemoved = await cleanupLegacyCycleReadyEvents({
+          authorization,
+          scheduledDate,
+          canonicalExternalId: externalId,
+          currentSessionId: legacyExternalId,
+          deleteCanonical: job.operation === 'delete',
+        });
         if (job.operation === 'delete') {
           response = await fetch(
             'https://intervals.icu/api/v1/athlete/0/events/bulk-delete',
@@ -106,23 +179,6 @@ Deno.serve(async (request) => {
           );
         } else {
           const payload = job.payload as Json;
-          // Remove the legacy UUID-keyed event before the canonical upsert.
-          // This repairs existing duplicate calendars and remains idempotent
-          // when the job is retried.
-          const cleanup = await fetch(
-            'https://intervals.icu/api/v1/athlete/0/events/bulk-delete',
-            {
-              method: 'PUT',
-              headers: { Authorization: authorization, 'content-type': 'application/json' },
-              body: JSON.stringify([{ external_id: legacyExternalId }]),
-            },
-          );
-          if (!cleanup.ok) {
-            const cleanupBody = await cleanup.text().catch(() => '');
-            throw new Error(
-              `Intervals.icu legacy cleanup returned ${cleanup.status}: ${cleanupBody.slice(0, 500)}`,
-            );
-          }
           response = await fetch(
             'https://intervals.icu/api/v1/athlete/0/events/bulk?upsert=true',
             {
@@ -171,7 +227,11 @@ Deno.serve(async (request) => {
           .update(deliveryUpdate).eq('id', job.delivery_id)
           .eq('desired_content_hash', job.content_hash);
         if (update.error) throw update.error;
-        results.push({ id: job.id, status: 'completed' });
+        results.push({
+          id: job.id,
+          status: 'completed',
+          duplicates_removed: duplicatesRemoved,
+        });
       } catch (error) {
         const failure = message(error).slice(0, 1000);
         const attempts = Number(job.attempt_count ?? 1);

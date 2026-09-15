@@ -53,14 +53,7 @@ class CloudSyncController extends AsyncNotifier<CloudSyncState> {
       final events = await ref.read(eventGoalRepositoryProvider).getGoals();
       await SupabaseEventGoalSyncRepository(Supabase.instance.client)
           .replaceEvents(events);
-      final now = DateTime.now();
-      final futureSessions =
-          await ref.read(databaseProvider).getPlannedSessions(
-                DateTime(now.year, now.month, now.day),
-                DateTime(now.year, now.month, now.day + 42),
-              );
-      await SupabasePlannedSessionSyncRepository(Supabase.instance.client)
-          .replaceFuture(futureSessions);
+      await uploadFuturePlan();
       final mutationResult =
           await ref.read(offlineMutationSyncServiceProvider)?.flush();
       final conflicts = mutationResult?.conflicts ?? 0;
@@ -78,5 +71,22 @@ class CloudSyncController extends AsyncNotifier<CloudSyncState> {
         message: 'Cloud upload failed safely: $error. You can retry now.',
       ));
     }
+  }
+
+  /// Converges the local future calendar into the athlete-owned server rows.
+  /// The delivery outbox then performs the single authoritative provider write.
+  Future<int> uploadFuturePlan() async {
+    final account = await ref.read(cloudAccountProvider.future);
+    if (account == null) {
+      throw StateError('Sign in before synchronising the training calendar.');
+    }
+    final now = DateTime.now();
+    final futureSessions = await ref.read(databaseProvider).getPlannedSessions(
+          DateTime(now.year, now.month, now.day),
+          DateTime(now.year, now.month, now.day + 42),
+        );
+    await SupabasePlannedSessionSyncRepository(Supabase.instance.client)
+        .replaceFuture(futureSessions);
+    return futureSessions.length;
   }
 }

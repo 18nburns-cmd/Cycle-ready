@@ -11,6 +11,7 @@ import 'package:cycle_ready/src/features/coaching/domain/adaptive_plan.dart';
 import 'package:cycle_ready/src/features/readiness/application/readiness_provider.dart';
 import 'package:cycle_ready/src/features/intervals/data/intervals_icu_service.dart';
 import 'package:cycle_ready/src/features/intervals/data/intervals_workout_delivery.dart';
+import 'package:cycle_ready/src/features/intervals/data/intervals_oauth_service.dart';
 import 'package:cycle_ready/src/features/coaching/domain/structured_workout.dart';
 import 'package:cycle_ready/src/features/coaching/domain/workout_delivery.dart';
 import 'package:cycle_ready/src/features/coaching/domain/workout_delivery_reconciliation.dart';
@@ -491,6 +492,11 @@ class PlannedSessionController {
               targetLoad: session.targetLoad,
             ))
         .toList();
+    final cloudOAuth = ref.read(intervalsOAuthServiceProvider);
+    if (await cloudOAuth?.isConnected() ?? false) {
+      await ref.read(cloudSyncControllerProvider.notifier).uploadFuturePlan();
+      return workouts.length;
+    }
     final provider = ref.read(workoutDeliveryProvider);
     final result = provider is ReconcilingWorkoutDeliveryProvider
         ? await provider.reconcile(

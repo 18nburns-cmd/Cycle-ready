@@ -177,6 +177,14 @@ This is the same canonical identity used by on-device reconciliation and remains
 stable when plan regeneration replaces a planned-session UUID. Contract-v2
 delivery removes the legacy UUID-keyed event before its canonical upsert, so
 existing duplicates converge safely and retries cannot create new duplicates.
+For an athlete with account-specific OAuth, Flutter uploads the future plan to
+Supabase and does not also publish the calendar with its optional local API key.
+The worker lists the affected provider date before each write and deletes only
+workout events whose `CycleReady - ` name and canonical or legacy CycleReady
+external identity establish ownership. It uses provider event IDs to remove
+old API-key and replaced-plan copies, while retaining the canonical event owned
+by the configured OAuth client. User-created and other-application workouts are
+never selected by this reconciliation.
 Provider upsert therefore remains idempotent if a worker stops after the remote
 write but before acknowledgement. Failed attempts use bounded backoff; success
 updates the delivery only when the desired hash is still current. Android cloud

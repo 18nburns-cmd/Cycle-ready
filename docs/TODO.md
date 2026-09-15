@@ -233,6 +233,7 @@ and make any delivery failure visible and recoverable.
       action.
 - [x] Deploy an idempotent scheduled delivery worker and converge phone-created plans before delivery.
 - [x] Unify phone and server Intervals.icu external IDs and repair legacy duplicate future workouts idempotently.
+- [x] Make OAuth delivery single-authority and reconcile legacy API-key and replaced-plan duplicates by provider event ID.
 - [ ] Add provider-neutral FIT and ZWO file exporters from structured steps.
 - [ ] Add Android share/export actions for manual Garmin, MyWhoosh or trainer
       import where direct APIs are unavailable.
