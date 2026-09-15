@@ -9,7 +9,14 @@ void main() {
       'lib/src/features/coaching/application/planned_session_controller.dart',
     ).readAsStringSync();
     expect(controller, contains('cloudOAuth?.isConnected()'));
+    expect(
+      controller,
+      contains(
+        'ref.read(workoutReconciliationProvider.notifier).state = const {}',
+      ),
+    );
     expect(controller, contains('.uploadFuturePlan()'));
+    expect(controller, contains('workoutDeliveryStatusesProvider'));
     expect(
       controller.indexOf('cloudOAuth?.isConnected()'),
       lessThan(controller.indexOf('ref.read(workoutDeliveryProvider)')),

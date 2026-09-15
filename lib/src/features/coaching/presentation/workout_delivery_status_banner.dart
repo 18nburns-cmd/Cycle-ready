@@ -23,6 +23,12 @@ class WorkoutDeliveryStatusBanner extends StatelessWidget {
           'Workout delivery failed',
           'CycleReady could not update Intervals.icu. You can retry safely.',
         ),
+      // An acknowledged server delivery is authoritative. A reconciliation
+      // result produced earlier by the legacy on-phone API-key route must not
+      // override it after the athlete moves to OAuth delivery.
+      (WorkoutDeliveryStatus.delivered, _) ||
+      (WorkoutDeliveryStatus.updated, _) =>
+        (null, '', ''),
       (_, WorkoutReconciliationStatus.externallyDiverged) ||
       (WorkoutDeliveryStatus.externallyDiverged, _) =>
         (

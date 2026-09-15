@@ -507,6 +507,12 @@ idempotent delivery outbox updates the same Intervals.icu provider records.
 The athlete must not need a separate manual cloud upload merely to make an
 adaptive workout change reach Intervals.icu.
 
+When server OAuth delivery is configured, its acknowledged delivery state is
+authoritative. A stale comparison produced by the legacy phone-side API-key
+publisher must never label an already delivered or updated workout as changed
+in Intervals.icu. Genuine server-reported failures, missing workouts and
+external divergence remain visible and recoverable.
+
 Support
 
 Sportives

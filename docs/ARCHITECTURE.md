@@ -222,7 +222,10 @@ provider entries are ignored and are never candidates for cleanup.
 with their planned date. The application combines those durable states with
 the latest live reconciliation result; presentation receives typed statuses
 and only renders attention states, keeping comparison and transport logic out
-of calendar widgets.
+of calendar widgets. Once OAuth delivery is active, the persisted server state
+is authoritative: entering that path clears any legacy phone-side comparison,
+and an acknowledged `delivered` or `updated` row cannot be overridden by a
+stale local mismatch. Server-reported failure or divergence remains visible.
 
 `AuthenticatedAthleteResolver` is the shared cloud ownership boundary. It
 requires a Supabase session and resolves `athletes.user_id = auth.uid()` before

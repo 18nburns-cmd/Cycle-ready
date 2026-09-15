@@ -26,6 +26,7 @@ import 'package:cycle_ready/src/features/weather/domain/ride_weather.dart';
 import 'package:cycle_ready/src/features/coaching/domain/unplanned_workout_choices.dart';
 import 'package:cycle_ready/src/features/cloud_sync/application/cloud_auth_provider.dart';
 import 'package:cycle_ready/src/features/cloud_sync/application/cloud_sync_controller.dart';
+import 'package:cycle_ready/src/features/coaching/application/workout_delivery_status_provider.dart';
 
 final todayPlannedSessionProvider = StreamProvider<PlannedSession?>(
   (ref) => ref.watch(plannedSessionRepositoryProvider).watchDay(DateTime.now()),
@@ -494,7 +495,11 @@ class PlannedSessionController {
         .toList();
     final cloudOAuth = ref.read(intervalsOAuthServiceProvider);
     if (await cloudOAuth?.isConnected() ?? false) {
+      // OAuth makes the server outbox authoritative. Discard any comparison
+      // cached by the legacy phone-side API-key publisher before uploading.
+      ref.read(workoutReconciliationProvider.notifier).state = const {};
       await ref.read(cloudSyncControllerProvider.notifier).uploadFuturePlan();
+      ref.invalidate(workoutDeliveryStatusesProvider);
       return workouts.length;
     }
     final provider = ref.read(workoutDeliveryProvider);

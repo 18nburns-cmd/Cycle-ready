@@ -41,4 +41,22 @@ void main() {
     await tester.tap(find.text('Retry'));
     expect(retried, isTrue);
   });
+
+  for (final status in [
+    WorkoutDeliveryStatus.delivered,
+    WorkoutDeliveryStatus.updated,
+  ]) {
+    testWidgets(
+        '${status.name} cloud delivery overrides stale phone reconciliation',
+        (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        home: WorkoutDeliveryStatusBanner(
+          deliveryStatus: status,
+          reconciliationStatus: WorkoutReconciliationStatus.externallyDiverged,
+        ),
+      ));
+
+      expect(find.text('Changed in Intervals.icu'), findsNothing);
+    });
+  }
 }
