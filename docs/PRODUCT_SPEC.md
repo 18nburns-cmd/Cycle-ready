@@ -807,6 +807,11 @@ failure, authenticated user and athlete IDs, bounded response/error body,
 schema parsing failure and the fallback condition are recorded in the device
 diagnostic log. Firebase Cloud Messaging delivers notifications only; it is
 not an authoritative coaching data source.
+Today waits for the restored cloud account before its first authoritative read.
+If that read fails transiently, the visible fallback remains truthful while the
+app retries after 30 seconds; authentication changes and returning to the app
+also refresh the request. A successful server read immediately regains
+authority without requiring the athlete to restart the app.
 Web Today reads that same versioned recommendation and presents its selected
 workout or rest day, coaching explanation and confidence instead of deriving a
 second answer from the portal's summary data.

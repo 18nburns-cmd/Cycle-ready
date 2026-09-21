@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:cycle_ready/src/features/cloud_sync/application/cloud_auth_provider.dart';
@@ -23,8 +24,23 @@ final dailyCoachingStatusProvider = FutureProvider<DailyCoachingStatus>(
   },
 );
 
+final serverCoachingRetryDelayProvider = Provider<Duration>(
+  (ref) => const Duration(seconds: 30),
+);
+
 final todayDailyCoachingRecommendationProvider =
-    FutureProvider<DailyCoachingRecommendation?>((ref) async {
+    FutureProvider.autoDispose<DailyCoachingRecommendation?>((ref) async {
+  final accountState = ref.watch(cloudAccountProvider);
+  final account = accountState.isLoading
+      ? await ref.watch(cloudAccountProvider.future)
+      : accountState.valueOrNull;
+  if (account == null) {
+    developer.log(
+      'Offline fallback activated: no authenticated cloud account is ready.',
+      name: 'CycleReady.serverCoaching',
+    );
+    return null;
+  }
   final repository = ref.watch(dailyCoachingStatusRepositoryProvider);
   if (repository == null) {
     developer.log(
@@ -33,12 +49,33 @@ final todayDailyCoachingRecommendationProvider =
     );
     return null;
   }
-  final recommendation = await repository.fetchToday();
-  if (recommendation == null) {
+  try {
+    final recommendation = await repository.fetchToday();
+    if (recommendation == null) {
+      _scheduleServerCoachingRetry(ref);
+      developer.log(
+        'Offline fallback activated: no authenticated recommendation returned.',
+        name: 'CycleReady.serverCoaching',
+      );
+    }
+    return recommendation;
+  } catch (error, stackTrace) {
+    _scheduleServerCoachingRetry(ref);
     developer.log(
-      'Offline fallback activated: no authenticated recommendation returned.',
+      'Offline fallback activated: authoritative recommendation request failed; '
+      'a retry has been scheduled.',
       name: 'CycleReady.serverCoaching',
+      error: error,
+      stackTrace: stackTrace,
     );
+    rethrow;
   }
-  return recommendation;
 });
+
+void _scheduleServerCoachingRetry(Ref ref) {
+  final timer = Timer(
+    ref.read(serverCoachingRetryDelayProvider),
+    ref.invalidateSelf,
+  );
+  ref.onDispose(timer.cancel);
+}

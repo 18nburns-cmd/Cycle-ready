@@ -155,6 +155,11 @@ its local coaching engine when configuration, authentication, connectivity or
 today's server result is unavailable and labels that state on Today. The web
 portal does not run a second coaching engine; until a recommendation exists it
 continues to show relational recovery and planned-session information.
+The Android recommendation provider observes the Supabase account lifecycle,
+waits for initial session restoration, and refreshes on authentication changes
+or app resume. A transient fetch failure retains the explicit fallback warning
+and schedules a 30-second retry while Today remains observed; leaving Today
+cancels that timer.
 
 Workout delivery state is represented in the coaching domain independently of
 Intervals.icu or any future provider. Its validated transitions prevent a

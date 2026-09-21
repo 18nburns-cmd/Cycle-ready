@@ -103,6 +103,8 @@ the phone is closed.
       repository contract.
 - [x] Update Android Today to consume the authoritative daily recommendation
       with an explicit offline fallback state.
+- [x] Make Android server coaching wait for account restoration and recover
+      automatically from transient failures, authentication changes and resume.
 - [x] Update web Today to consume the same recommendation contract.
 - [x] Add contract tests comparing server and Dart safety outcomes for shared
       golden scenarios.
@@ -387,6 +389,7 @@ quietly influencing coaching.
 
 Goal: keep autonomous coaching changes safe as the system becomes more capable.
 
+- [x] Regenerate ignored Drift sources in clean Android and web release workflows.
 - [ ] Create anonymized golden athlete timelines for normal training, overload,
       illness, taper and missing-data scenarios.
 - [ ] Run the same golden timelines through Dart and server coaching engines.

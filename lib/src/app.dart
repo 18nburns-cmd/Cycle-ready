@@ -5,6 +5,7 @@ import 'package:cycle_ready/src/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cycle_ready/src/features/coaching/application/coach_reminder_controller.dart';
+import 'package:cycle_ready/src/features/coaching/application/daily_coaching_status_provider.dart';
 import 'package:cycle_ready/src/features/sync/application/sync_coordinator.dart';
 import 'package:cycle_ready/src/features/cloud_sync/application/cloud_auth_provider.dart';
 import 'package:cycle_ready/src/features/notifications/application/push_notification_service.dart';
@@ -30,6 +31,7 @@ class _CycleReadyAppState extends ConsumerState<CycleReadyApp>
       _authSubscription =
           Supabase.instance.client.auth.onAuthStateChange.listen(
         (state) {
+          ref.invalidate(todayDailyCoachingRecommendationProvider);
           if (state.event == AuthChangeEvent.passwordRecovery && mounted) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (mounted) _showPasswordReset();
@@ -129,6 +131,7 @@ class _CycleReadyAppState extends ConsumerState<CycleReadyApp>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      ref.invalidate(todayDailyCoachingRecommendationProvider);
       ref.read(appSyncControllerProvider.notifier).sync();
     }
   }

@@ -30,6 +30,9 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Generate Drift database sources
+        run: dart run build_runner build --delete-conflicting-outputs
+
       - name: Validate cloud configuration
         env:
           SUPABASE_URL: ${{ vars.CYCLEREADY_SUPABASE_URL }}

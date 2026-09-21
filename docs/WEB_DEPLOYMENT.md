@@ -2,7 +2,9 @@
 
 The responsive web dashboard is deployed from `main` by
 `.github/workflows/deploy_web.yml`. GitHub Actions builds the browser-specific
-entry point and publishes `build/web` to GitHub Pages.
+entry point and publishes `build/web` to GitHub Pages. The clean runner
+regenerates Drift's ignored `app_database.g.dart` source before compilation;
+the generated file must not be committed to make a deployment succeed.
 
 ## Repository configuration
 
