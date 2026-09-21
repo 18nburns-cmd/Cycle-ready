@@ -45,6 +45,28 @@ const workoutSnapshot = (workout: Json | null, planned: Json): Json => workout ?
   purpose: planned.purpose,
 };
 
+const workoutLabel = (family: string): string => ({
+  recovery: 'Recovery',
+  endurance: 'Endurance',
+  tempo: 'Tempo',
+  sweet_spot: 'Sweet spot',
+  threshold: 'Threshold',
+  vo2_max: 'VO2 max',
+  anaerobic: 'Anaerobic',
+  sprint: 'Sprint',
+  race_simulation: 'Race simulation',
+}[family] ?? 'Structured workout');
+
+const scaledTargetLoad = ({ planned, replacement }: {
+  planned: Json;
+  replacement: Json;
+}): number => {
+  const oldDuration = Math.max(1, num(planned.planned_duration_minutes));
+  const newDuration = Math.max(0, num(replacement.duration_minutes));
+  const oldLoad = Math.max(0, num(planned.planned_load));
+  return Math.round(oldLoad * newDuration / oldDuration);
+};
+
 const suitability = (
   candidate: Json,
   context: {
@@ -261,12 +283,27 @@ Deno.serve(async (request) => {
         swap_margin: SWAP_MARGIN,
       };
       const confidence = Math.max(0.25, Math.min(1, num(readiness.data_confidence)));
+      const normalizedReplacement = replacement == null ? null : {
+        ...replacement,
+        family: String(replacement.session_type ?? planned.session_type),
+        title: replacement.id === current?.id && String(planned.purpose ?? '').trim()
+          ? String(planned.purpose)
+          : `${workoutLabel(String(replacement.session_type ?? 'endurance'))} · ${num(replacement.duration_minutes)} min`,
+        target_load: scaledTargetLoad({ planned, replacement }),
+      };
+      const planSignature = [
+        planned.current_workout_id ?? planned.workout_library_id ?? 'unlinked',
+        planned.session_type,
+        planned.planned_duration_minutes,
+        planned.planned_load ?? 0,
+      ].join(':');
       const payload = {
         athlete_id: planned.athlete_id, original_workout: original,
-        replacement_workout: replacement, replacement_workout_id: replacement?.id ?? '',
+        replacement_workout: normalizedReplacement,
+        replacement_workout_id: normalizedReplacement?.id ?? '',
         adaptation_level: adaptationLevel, decision, reason_codes: [...new Set(reasons)],
         evidence, explanation, confidence, coaching_model_version: MODEL_VERSION,
-        decision_key: `${planned.id}:${decisionDate}:${readiness.id ?? 'missing'}:${MODEL_VERSION}`,
+        decision_key: `${planned.id}:${decisionDate}:${readiness.id ?? 'missing'}:${planSignature}:${MODEL_VERSION}`,
       };
       const rpc = await supabase.rpc('apply_adaptive_decision', { target_session_id: planned.id, decision_payload: payload });
       if (rpc.error) throw rpc.error;

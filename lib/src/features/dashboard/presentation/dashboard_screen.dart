@@ -83,6 +83,7 @@ class DashboardScreen extends ConsumerWidget {
     );
     final coaching = ref.watch(todayCoachingProvider);
     final cloudCoaching = ref.watch(todayDailyCoachingRecommendationProvider);
+    ref.watch(authoritativeDailyPlanSyncProvider);
     final rideWeather = ref.watch(todayRideWeatherProvider);
     final now = DateTime.now();
     final latestRide = rides.isEmpty

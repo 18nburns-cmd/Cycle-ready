@@ -26,7 +26,9 @@ import 'package:cycle_ready/src/features/weather/domain/ride_weather.dart';
 import 'package:cycle_ready/src/features/coaching/domain/unplanned_workout_choices.dart';
 import 'package:cycle_ready/src/features/cloud_sync/application/cloud_auth_provider.dart';
 import 'package:cycle_ready/src/features/cloud_sync/application/cloud_sync_controller.dart';
+import 'package:cycle_ready/src/features/coaching/application/daily_coaching_status_provider.dart';
 import 'package:cycle_ready/src/features/coaching/application/workout_delivery_status_provider.dart';
+import 'package:cycle_ready/src/features/coaching/domain/daily_coaching_status.dart';
 
 final todayPlannedSessionProvider = StreamProvider<PlannedSession?>(
   (ref) => ref.watch(plannedSessionRepositoryProvider).watchDay(DateTime.now()),
@@ -50,12 +52,60 @@ final plannedSessionsProvider =
       .watchRange(range.start, range.end),
 );
 
+final authoritativeDailyPlanSyncProvider = FutureProvider.autoDispose<void>(
+  (ref) async {
+    final recommendation =
+        await ref.watch(todayDailyCoachingRecommendationProvider.future);
+    if (recommendation == null) return;
+    final planned = await ref.watch(todayPlannedSessionProvider.future);
+    if (dailyCoachingRecommendationMatchesPlan(
+      recommendation: recommendation,
+      plannedSessionType: planned?.sessionType,
+      plannedTitle: planned?.title,
+      plannedDurationMinutes: planned?.durationMinutes,
+      plannedTargetLoad: planned?.targetLoad,
+    )) {
+      return;
+    }
+    await ref
+        .read(plannedSessionControllerProvider)
+        .applyAuthoritativeRecommendation(recommendation, existing: planned);
+  },
+);
+
 class PlannedSessionController {
   PlannedSessionController(this.ref);
   final Ref ref;
 
   PlannedSessionRepository get _sessions =>
       ref.read(plannedSessionRepositoryProvider);
+
+  Future<void> applyAuthoritativeRecommendation(
+    DailyCoachingRecommendation recommendation, {
+    PlannedSession? existing,
+  }) async {
+    final workout = recommendation.workout;
+    if (workout == null && recommendation.decision.toUpperCase() != 'REST') {
+      return;
+    }
+    await _sessions.save(
+      PlannedSessionWrite(
+        day: DateTime(
+          recommendation.date.year,
+          recommendation.date.month,
+          recommendation.date.day,
+        ),
+        sessionType: workout == null ? 'rest' : _sessionType(workout.family),
+        title: workout?.title ?? 'Rest day',
+        durationMinutes: workout?.durationMinutes ?? 0,
+        targetLoad: workout?.targetLoad ?? 0,
+        confirmed: existing?.confirmed ?? false,
+        prescription: existing?.prescription ?? '',
+        origin: 'adaptive',
+        adaptationReason: recommendation.explanation,
+      ),
+    );
+  }
 
   Future<void> confirm(DailySession session) async {
     final date = session.date;
@@ -525,4 +575,15 @@ class PlannedSessionController {
 
   bool _sameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
+}
+
+String _sessionType(String family) {
+  final normalized = family.toLowerCase().replaceAll('-', '_');
+  return switch (normalized) {
+    'rest' => 'rest',
+    'recovery' => 'recovery',
+    'endurance' => 'endurance',
+    'tempo' || 'sweet_spot' => 'tempo',
+    _ => 'intervals',
+  };
 }

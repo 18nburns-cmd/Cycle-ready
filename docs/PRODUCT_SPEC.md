@@ -812,6 +812,12 @@ If that read fails transiently, the visible fallback remains truthful while the
 app retries after 30 seconds; authentication changes and returning to the app
 also refresh the request. A successful server read immediately regains
 authority without requiring the athlete to restart the app.
+Before reusing a stored recommendation, Android compares its selected workout
+with the current authoritative planned-session type, title, duration and load.
+A mismatch requests a fresh server decision. The accepted recommendation is
+then written into the local calendar, while the backend applies the same
+workout fields atomically to `planned_sessions`, so Today, Plan and external
+workout delivery describe one session.
 Web Today reads that same versioned recommendation and presents its selected
 workout or rest day, coaching explanation and confidence instead of deriving a
 second answer from the portal's summary data.

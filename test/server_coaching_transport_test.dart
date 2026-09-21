@@ -15,6 +15,12 @@ void main() {
     expect(source, contains('.timeout(requestTimeout)'));
   });
 
+  test('a stored workout must still match the current planned session', () {
+    expect(source, contains(".from('planned_sessions')"));
+    expect(source, contains('dailyCoachingRecommendationMatchesPlan'));
+    expect(source, contains('requesting authoritative recalculation'));
+  });
+
   test('transport logs every required diagnostic boundary', () {
     for (final evidence in [
       'HTTP',

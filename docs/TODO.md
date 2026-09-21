@@ -105,6 +105,8 @@ the phone is closed.
       with an explicit offline fallback state.
 - [x] Make Android server coaching wait for account restoration and recover
       automatically from transient failures, authentication changes and resume.
+- [x] Recalculate stale daily coaching and atomically converge adapted workout
+      fields across Today, the local/server calendars and provider delivery.
 - [x] Update web Today to consume the same recommendation contract.
 - [x] Add contract tests comparing server and Dart safety outcomes for shared
       golden scenarios.

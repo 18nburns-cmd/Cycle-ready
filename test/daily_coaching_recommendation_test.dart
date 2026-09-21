@@ -6,6 +6,7 @@ void main() {
     final recommendation = DailyCoachingRecommendation.fromJson({
       'coaching_date': '2026-09-08',
       'model_version': 'daily-coaching-v1',
+      'generated_at': '2026-09-08T05:00:00Z',
       'recommendation': {
         'decision': 'MODIFY',
         'explanation': 'Reduced duration after poor sleep.',
@@ -24,6 +25,10 @@ void main() {
     expect(recommendation.workout?.title, 'Short aerobic endurance');
     expect(recommendation.workout?.durationMinutes, 45);
     expect(recommendation.workout?.targetLoad, 32);
+    expect(
+      recommendation.generatedAt,
+      DateTime.parse('2026-09-08T05:00:00Z'),
+    );
   });
 
   test('accepts an authoritative rest recommendation without a workout', () {
@@ -60,5 +65,74 @@ void main() {
     expect(recommendation.decision, 'KEEP');
     expect(recommendation.workout?.durationMinutes, 60);
     expect(recommendation.confidence, .87);
+  });
+
+  test('detects when a stored recommendation differs from the calendar', () {
+    final recommendation = DailyCoachingRecommendation(
+      date: DateTime(2026, 9, 21),
+      decision: 'MODIFY',
+      explanation: 'Use the closest safe dose.',
+      confidence: .8,
+      modelVersion: 'test-v1',
+      workout: const DailyCoachingWorkout(
+        title: 'Endurance · 45 min',
+        family: 'endurance',
+        durationMinutes: 45,
+        targetLoad: 19,
+      ),
+    );
+
+    expect(
+      dailyCoachingRecommendationMatchesPlan(
+        recommendation: recommendation,
+        plannedSessionType: 'recovery',
+        plannedTitle: 'Recovery · 35 min',
+        plannedDurationMinutes: 35,
+        plannedTargetLoad: 15,
+      ),
+      isFalse,
+    );
+    expect(
+      dailyCoachingRecommendationMatchesPlan(
+        recommendation: recommendation,
+        plannedSessionType: 'endurance',
+        plannedTitle: 'Endurance · 45 min',
+        plannedDurationMinutes: 45,
+        plannedTargetLoad: 19,
+      ),
+      isTrue,
+    );
+  });
+
+  test('matches an authoritative rest decision only to a calendar rest day',
+      () {
+    final recommendation = DailyCoachingRecommendation(
+      date: DateTime(2026, 9, 21),
+      decision: 'REST',
+      explanation: 'Rest is required.',
+      confidence: .9,
+      modelVersion: 'test-v1',
+    );
+
+    expect(
+      dailyCoachingRecommendationMatchesPlan(
+        recommendation: recommendation,
+        plannedSessionType: 'rest',
+        plannedTitle: 'Rest day',
+        plannedDurationMinutes: 0,
+        plannedTargetLoad: 0,
+      ),
+      isTrue,
+    );
+    expect(
+      dailyCoachingRecommendationMatchesPlan(
+        recommendation: recommendation,
+        plannedSessionType: 'recovery',
+        plannedTitle: 'Recovery · 30 min',
+        plannedDurationMinutes: 30,
+        plannedTargetLoad: 10,
+      ),
+      isFalse,
+    );
   });
 }

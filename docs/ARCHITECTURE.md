@@ -160,6 +160,10 @@ waits for initial session restoration, and refreshes on authentication changes
 or app resume. A transient fetch failure retains the explicit fallback warning
 and schedules a 30-second retry while Today remains observed; leaving Today
 cancels that timer.
+Stored recommendations are reusable only when selected workout type, title,
+duration and load match the current server planned session. A mismatch invokes
+the idempotent daily pipeline again. Accepted recommendations converge into the
+local Drift calendar through `authoritativeDailyPlanSyncProvider`.
 
 Workout delivery state is represented in the coaching domain independently of
 Intervals.icu or any future provider. Its validated transitions prevent a
@@ -270,7 +274,12 @@ current Supabase bearer session. The function validates that JWT and proves
 athlete ownership before entering its service-role pipeline. Stored and direct
 responses map to the same domain contract, with privacy-bounded transport and
 parsing diagnostics. FCM remains notification transport only, not coaching
-authority. Immediate illness, injury and zero-availability safety gates are a
+authority.
+`apply_adaptive_decision` updates workout identity, family, adaptation, display
+title, duration and load in one transaction. The normalized replacement is
+also returned in the daily recommendation, preventing Today, Plan and the
+delivery outbox from observing different versions of one adapted workout.
+Immediate illness, injury and zero-availability safety gates are a
 shared server module; server and Dart policies are checked against the same
 version-controlled golden scenarios to prevent cross-runtime drift. Drift
 schema is independent from the relational `adaptive_decisions` constraint,

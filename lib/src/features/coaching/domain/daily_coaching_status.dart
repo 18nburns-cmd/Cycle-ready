@@ -52,6 +52,7 @@ class DailyCoachingRecommendation {
       required this.explanation,
       required this.confidence,
       required this.modelVersion,
+      this.generatedAt,
       this.workout});
 
   factory DailyCoachingRecommendation.fromJson(Map<String, dynamic> row) {
@@ -63,6 +64,9 @@ class DailyCoachingRecommendation {
       explanation: '${payload['explanation']}',
       confidence: (payload['confidence'] as num?)?.toDouble() ?? .45,
       modelVersion: '${payload['model_version'] ?? row['model_version']}',
+      generatedAt: DateTime.tryParse(
+        '${payload['generated_at'] ?? row['generated_at'] ?? ''}',
+      ),
       workout: selected is Map
           ? DailyCoachingWorkout.fromJson(Map<String, dynamic>.from(selected))
           : null,
@@ -83,7 +87,38 @@ class DailyCoachingRecommendation {
   final String explanation;
   final double confidence;
   final String modelVersion;
+  final DateTime? generatedAt;
   final DailyCoachingWorkout? workout;
+}
+
+bool dailyCoachingRecommendationMatchesPlan({
+  required DailyCoachingRecommendation recommendation,
+  required String? plannedSessionType,
+  required String? plannedTitle,
+  required int? plannedDurationMinutes,
+  required int? plannedTargetLoad,
+}) {
+  final workout = recommendation.workout;
+  if (plannedSessionType == null) return workout == null;
+  if (workout == null) {
+    return recommendation.decision.toUpperCase() == 'REST' &&
+        plannedSessionType == 'rest';
+  }
+  final normalizedFamily = workout.family.toLowerCase().replaceAll('-', '_');
+  final normalizedType = switch (normalizedFamily) {
+    'sweet_spot' => 'tempo',
+    'threshold' ||
+    'vo2_max' ||
+    'anaerobic' ||
+    'sprint' ||
+    'race_simulation' =>
+      'intervals',
+    _ => normalizedFamily,
+  };
+  return normalizedType == plannedSessionType &&
+      workout.title == plannedTitle &&
+      workout.durationMinutes == plannedDurationMinutes &&
+      workout.targetLoad == plannedTargetLoad;
 }
 
 class DailyCoachingWorkout {

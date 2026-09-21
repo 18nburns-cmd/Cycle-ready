@@ -42,13 +42,37 @@ class SupabaseDailyCoachingStatusRepository
       _log('Read recommendation user=${user.id} athlete=$athleteId day=$day.');
       final row = await client
           .from('daily_coaching_recommendations')
-          .select('coaching_date,recommendation,model_version')
+          .select('coaching_date,recommendation,model_version,generated_at')
           .eq('athlete_id', athleteId)
           .eq('coaching_date', day)
           .maybeSingle();
-      if (row != null) {
+      final planned = await client
+          .from('planned_sessions')
+          .select(
+            'session_type,purpose,planned_duration_minutes,planned_load',
+          )
+          .eq('athlete_id', athleteId)
+          .eq('scheduled_date', day)
+          .eq('completion_status', 'planned')
+          .maybeSingle();
+      final storedRecommendation = row == null ? null : _parseStored(row);
+      final recommendationIsCurrent = storedRecommendation != null &&
+          dailyCoachingRecommendationMatchesPlan(
+            recommendation: storedRecommendation,
+            plannedSessionType: planned?['session_type'] as String?,
+            plannedTitle: planned?['purpose'] as String?,
+            plannedDurationMinutes:
+                (planned?['planned_duration_minutes'] as num?)?.round(),
+            plannedTargetLoad: (planned?['planned_load'] as num?)?.round(),
+          );
+      if (recommendationIsCurrent) {
         _log('Authoritative recommendation loaded from relational storage.');
-        return _parseStored(row);
+        return storedRecommendation;
+      }
+
+      if (row != null) {
+        _log('Stored recommendation differs from the current planned session; '
+            'requesting authoritative recalculation.');
       }
 
       final base = client.rest.url.replaceFirst('/rest/v1', '');
