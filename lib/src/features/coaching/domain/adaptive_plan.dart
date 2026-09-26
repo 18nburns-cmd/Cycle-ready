@@ -75,6 +75,7 @@ class AdaptivePlanGenerator {
     int? eventLongRideMinutes,
     int horizonDays = 28,
     List<CyclingAvailability> availability = const [],
+    Set<int> plannedRecoveryWeekIndexes = const {},
     RecoveryDayLimitEvidence recoveryLimitEvidence =
         const RecoveryDayLimitEvidence(),
   }) {
@@ -101,8 +102,10 @@ class AdaptivePlanGenerator {
     for (var offset = 0; offset < horizonDays; offset++) {
       final day = DateTime(start.year, start.month, start.day + offset);
       final weekIndex = offset ~/ 7;
-      final isRecoveryWeek =
-          weekIndex >= 2 && (readiness < 55 || form < -10 || rampRate > 8);
+      final isPlannedRecoveryWeek =
+          plannedRecoveryWeekIndexes.contains(weekIndex);
+      final isRecoveryWeek = isPlannedRecoveryWeek ||
+          (weekIndex >= 2 && (readiness < 55 || form < -10 || rampRate > 8));
       if (weekIndex != activeWeek) {
         activeWeek = weekIndex;
         weeklyLoad = 0;
@@ -193,7 +196,7 @@ class AdaptivePlanGenerator {
         loadAdjusted,
         previous: result,
         ftp: ftp,
-        plannedRecoveryWeek: isRecoveryWeek,
+        plannedRecoveryWeek: isPlannedRecoveryWeek,
         evidence: recoveryLimitEvidence,
       );
       result.add(limited);

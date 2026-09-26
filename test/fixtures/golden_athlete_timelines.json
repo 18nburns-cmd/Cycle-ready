@@ -1,0 +1,66 @@
+{
+  "schema_version": "1.0",
+  "description": "Synthetic, anonymized athlete-day timelines for deterministic coaching safety tests.",
+  "timelines": [
+    {
+      "id": "normal_training",
+      "phase": "FOUNDATION",
+      "baseline": { "ftp_watts": 250, "hrv_ms": 62, "resting_hr_bpm": 48 },
+      "days": [
+        { "date": "2026-01-05", "planned": { "family": "recovery", "duration_minutes": 40, "target_load": 18 }, "evidence": { "readiness": 74, "fatigue_risk": 31, "sleep_deficit_minutes": 20, "hrv_change_percent": 2, "resting_hr_delta": 0, "acute_chronic_load_ratio": 1.02, "fatigue": 2, "soreness": 2, "stress": 2, "illness_symptoms": false, "injury_pain": false, "available_minutes": 60 }, "expected": { "allowed_actions": ["KEEP", "REDUCE"], "hard_session_allowed": false } },
+        { "date": "2026-01-06", "planned": { "family": "endurance", "duration_minutes": 75, "target_load": 50 }, "evidence": { "readiness": 78, "fatigue_risk": 28, "sleep_deficit_minutes": 0, "hrv_change_percent": 4, "resting_hr_delta": -1, "acute_chronic_load_ratio": 1.04, "fatigue": 2, "soreness": 1, "stress": 2, "illness_symptoms": false, "injury_pain": false, "available_minutes": 90 }, "expected": { "allowed_actions": ["KEEP"], "hard_session_allowed": true } },
+        { "date": "2026-01-07", "planned": { "family": "tempo", "duration_minutes": 65, "target_load": 68 }, "evidence": { "readiness": 76, "fatigue_risk": 34, "sleep_deficit_minutes": 25, "hrv_change_percent": 1, "resting_hr_delta": 1, "acute_chronic_load_ratio": 1.08, "fatigue": 2, "soreness": 2, "stress": 2, "illness_symptoms": false, "injury_pain": false, "available_minutes": 75 }, "expected": { "allowed_actions": ["KEEP", "REDUCE"], "hard_session_allowed": true } },
+        { "date": "2026-01-08", "planned": { "family": "rest", "duration_minutes": 0, "target_load": 0 }, "evidence": { "readiness": 71, "fatigue_risk": 39, "sleep_deficit_minutes": 35, "hrv_change_percent": -2, "resting_hr_delta": 1, "acute_chronic_load_ratio": 1.06, "fatigue": 3, "soreness": 2, "stress": 2, "illness_symptoms": false, "injury_pain": false, "available_minutes": 0 }, "expected": { "allowed_actions": ["REST"], "hard_session_allowed": false } },
+        { "date": "2026-01-09", "planned": { "family": "endurance", "duration_minutes": 90, "target_load": 60 }, "evidence": { "readiness": 80, "fatigue_risk": 25, "sleep_deficit_minutes": 0, "hrv_change_percent": 5, "resting_hr_delta": -2, "acute_chronic_load_ratio": 1.01, "fatigue": 1, "soreness": 1, "stress": 2, "illness_symptoms": false, "injury_pain": false, "available_minutes": 120 }, "expected": { "allowed_actions": ["KEEP"], "hard_session_allowed": true } }
+      ]
+    },
+    {
+      "id": "overload",
+      "phase": "BUILD",
+      "baseline": { "ftp_watts": 250, "hrv_ms": 62, "resting_hr_bpm": 48 },
+      "days": [
+        { "date": "2026-02-02", "planned": { "family": "threshold", "duration_minutes": 70, "target_load": 85 }, "evidence": { "readiness": 62, "fatigue_risk": 52, "sleep_deficit_minutes": 45, "hrv_change_percent": -5, "resting_hr_delta": 3, "acute_chronic_load_ratio": 1.22, "fatigue": 3, "soreness": 3, "stress": 3, "illness_symptoms": false, "injury_pain": false, "available_minutes": 75 }, "expected": { "allowed_actions": ["KEEP", "REDUCE"], "hard_session_allowed": true } },
+        { "date": "2026-02-03", "planned": { "family": "vo2_max", "duration_minutes": 65, "target_load": 90 }, "evidence": { "readiness": 51, "fatigue_risk": 68, "sleep_deficit_minutes": 75, "hrv_change_percent": -12, "resting_hr_delta": 6, "acute_chronic_load_ratio": 1.38, "fatigue": 4, "soreness": 4, "stress": 3, "illness_symptoms": false, "injury_pain": false, "available_minutes": 70 }, "expected": { "allowed_actions": ["REDUCE", "MODIFY"], "hard_session_allowed": false } },
+        { "date": "2026-02-04", "planned": { "family": "endurance", "duration_minutes": 90, "target_load": 62 }, "evidence": { "readiness": 42, "fatigue_risk": 82, "sleep_deficit_minutes": 110, "hrv_change_percent": -18, "resting_hr_delta": 8, "acute_chronic_load_ratio": 1.52, "fatigue": 5, "soreness": 4, "stress": 4, "illness_symptoms": false, "injury_pain": false, "available_minutes": 90 }, "expected": { "allowed_actions": ["REDUCE", "REST"], "hard_session_allowed": false } },
+        { "date": "2026-02-05", "planned": { "family": "recovery", "duration_minutes": 35, "target_load": 14 }, "evidence": { "readiness": 44, "fatigue_risk": 79, "sleep_deficit_minutes": 90, "hrv_change_percent": -15, "resting_hr_delta": 7, "acute_chronic_load_ratio": 1.44, "fatigue": 4, "soreness": 4, "stress": 3, "illness_symptoms": false, "injury_pain": false, "available_minutes": 45 }, "expected": { "allowed_actions": ["KEEP", "REDUCE", "REST"], "hard_session_allowed": false } },
+        { "date": "2026-02-06", "planned": { "family": "tempo", "duration_minutes": 60, "target_load": 62 }, "evidence": { "readiness": 55, "fatigue_risk": 61, "sleep_deficit_minutes": 40, "hrv_change_percent": -7, "resting_hr_delta": 4, "acute_chronic_load_ratio": 1.28, "fatigue": 3, "soreness": 3, "stress": 3, "illness_symptoms": false, "injury_pain": false, "available_minutes": 70 }, "expected": { "allowed_actions": ["REDUCE", "MODIFY"], "hard_session_allowed": false } }
+      ]
+    },
+    {
+      "id": "illness",
+      "phase": "FOUNDATION",
+      "baseline": { "ftp_watts": 250, "hrv_ms": 62, "resting_hr_bpm": 48 },
+      "days": [
+        { "date": "2026-03-09", "planned": { "family": "endurance", "duration_minutes": 75, "target_load": 50 }, "evidence": { "readiness": 68, "fatigue_risk": 44, "sleep_deficit_minutes": 35, "hrv_change_percent": -3, "resting_hr_delta": 2, "acute_chronic_load_ratio": 1.05, "fatigue": 3, "soreness": 2, "stress": 2, "illness_symptoms": false, "injury_pain": false, "available_minutes": 90 }, "expected": { "allowed_actions": ["KEEP", "REDUCE"], "hard_session_allowed": true } },
+        { "date": "2026-03-10", "planned": { "family": "tempo", "duration_minutes": 60, "target_load": 64 }, "evidence": { "readiness": 38, "fatigue_risk": 86, "sleep_deficit_minutes": 120, "hrv_change_percent": -22, "resting_hr_delta": 10, "acute_chronic_load_ratio": 1.08, "fatigue": 5, "soreness": 4, "stress": 4, "illness_symptoms": true, "injury_pain": false, "available_minutes": 60 }, "expected": { "allowed_actions": ["REST"], "hard_session_allowed": false } },
+        { "date": "2026-03-11", "planned": { "family": "recovery", "duration_minutes": 30, "target_load": 12 }, "evidence": { "readiness": 31, "fatigue_risk": 91, "sleep_deficit_minutes": 150, "hrv_change_percent": -25, "resting_hr_delta": 12, "acute_chronic_load_ratio": 0.98, "fatigue": 5, "soreness": 4, "stress": 4, "illness_symptoms": true, "injury_pain": false, "available_minutes": 30 }, "expected": { "allowed_actions": ["REST"], "hard_session_allowed": false } },
+        { "date": "2026-03-12", "planned": { "family": "rest", "duration_minutes": 0, "target_load": 0 }, "evidence": { "readiness": 40, "fatigue_risk": 80, "sleep_deficit_minutes": 80, "hrv_change_percent": -16, "resting_hr_delta": 8, "acute_chronic_load_ratio": 0.88, "fatigue": 4, "soreness": 3, "stress": 3, "illness_symptoms": true, "injury_pain": false, "available_minutes": 0 }, "expected": { "allowed_actions": ["REST"], "hard_session_allowed": false } },
+        { "date": "2026-03-13", "planned": { "family": "recovery", "duration_minutes": 30, "target_load": 12 }, "evidence": { "readiness": 53, "fatigue_risk": 63, "sleep_deficit_minutes": 35, "hrv_change_percent": -8, "resting_hr_delta": 4, "acute_chronic_load_ratio": 0.78, "fatigue": 3, "soreness": 2, "stress": 2, "illness_symptoms": false, "injury_pain": false, "available_minutes": 40 }, "expected": { "allowed_actions": ["KEEP", "REDUCE", "REST"], "hard_session_allowed": false } }
+      ]
+    },
+    {
+      "id": "taper",
+      "phase": "TAPER",
+      "baseline": { "ftp_watts": 250, "hrv_ms": 62, "resting_hr_bpm": 48 },
+      "days": [
+        { "date": "2026-04-13", "planned": { "family": "endurance", "duration_minutes": 60, "target_load": 38 }, "evidence": { "readiness": 72, "fatigue_risk": 39, "sleep_deficit_minutes": 20, "hrv_change_percent": 0, "resting_hr_delta": 1, "acute_chronic_load_ratio": 0.92, "fatigue": 2, "soreness": 2, "stress": 3, "illness_symptoms": false, "injury_pain": false, "available_minutes": 75 }, "expected": { "allowed_actions": ["KEEP", "REDUCE"], "hard_session_allowed": true } },
+        { "date": "2026-04-14", "planned": { "family": "threshold", "duration_minutes": 45, "target_load": 48 }, "evidence": { "readiness": 77, "fatigue_risk": 32, "sleep_deficit_minutes": 0, "hrv_change_percent": 3, "resting_hr_delta": 0, "acute_chronic_load_ratio": 0.88, "fatigue": 2, "soreness": 1, "stress": 3, "illness_symptoms": false, "injury_pain": false, "available_minutes": 60 }, "expected": { "allowed_actions": ["KEEP", "REDUCE"], "hard_session_allowed": true } },
+        { "date": "2026-04-15", "planned": { "family": "rest", "duration_minutes": 0, "target_load": 0 }, "evidence": { "readiness": 79, "fatigue_risk": 27, "sleep_deficit_minutes": 0, "hrv_change_percent": 5, "resting_hr_delta": -1, "acute_chronic_load_ratio": 0.82, "fatigue": 1, "soreness": 1, "stress": 2, "illness_symptoms": false, "injury_pain": false, "available_minutes": 0 }, "expected": { "allowed_actions": ["REST"], "hard_session_allowed": false } },
+        { "date": "2026-04-16", "planned": { "family": "tempo", "duration_minutes": 40, "target_load": 40 }, "evidence": { "readiness": 82, "fatigue_risk": 24, "sleep_deficit_minutes": 0, "hrv_change_percent": 6, "resting_hr_delta": -2, "acute_chronic_load_ratio": 0.78, "fatigue": 1, "soreness": 1, "stress": 2, "illness_symptoms": false, "injury_pain": false, "available_minutes": 50 }, "expected": { "allowed_actions": ["KEEP", "REDUCE"], "hard_session_allowed": true } },
+        { "date": "2026-04-17", "planned": { "family": "recovery", "duration_minutes": 30, "target_load": 10 }, "evidence": { "readiness": 84, "fatigue_risk": 20, "sleep_deficit_minutes": 0, "hrv_change_percent": 8, "resting_hr_delta": -2, "acute_chronic_load_ratio": 0.72, "fatigue": 1, "soreness": 1, "stress": 2, "illness_symptoms": false, "injury_pain": false, "available_minutes": 40 }, "expected": { "allowed_actions": ["KEEP"], "hard_session_allowed": false } }
+      ]
+    },
+    {
+      "id": "missing_data",
+      "phase": "FOUNDATION",
+      "baseline": { "ftp_watts": 250, "hrv_ms": null, "resting_hr_bpm": 48 },
+      "days": [
+        { "date": "2026-05-04", "planned": { "family": "endurance", "duration_minutes": 60, "target_load": 40 }, "evidence": { "readiness": 50, "fatigue_risk": 50, "sleep_deficit_minutes": null, "hrv_change_percent": null, "resting_hr_delta": null, "acute_chronic_load_ratio": null, "fatigue": 3, "soreness": 3, "stress": 3, "illness_symptoms": false, "injury_pain": false, "available_minutes": 75 }, "expected": { "allowed_actions": ["KEEP", "REDUCE"], "hard_session_allowed": false } },
+        { "date": "2026-05-05", "planned": { "family": "tempo", "duration_minutes": 60, "target_load": 62 }, "evidence": { "readiness": 50, "fatigue_risk": 50, "sleep_deficit_minutes": null, "hrv_change_percent": null, "resting_hr_delta": null, "acute_chronic_load_ratio": null, "fatigue": 3, "soreness": 3, "stress": 3, "illness_symptoms": false, "injury_pain": false, "available_minutes": 60 }, "expected": { "allowed_actions": ["REDUCE", "MODIFY"], "hard_session_allowed": false } },
+        { "date": "2026-05-06", "planned": { "family": "rest", "duration_minutes": 0, "target_load": 0 }, "evidence": { "readiness": 50, "fatigue_risk": 50, "sleep_deficit_minutes": null, "hrv_change_percent": null, "resting_hr_delta": null, "acute_chronic_load_ratio": null, "fatigue": 3, "soreness": 3, "stress": 3, "illness_symptoms": false, "injury_pain": false, "available_minutes": 0 }, "expected": { "allowed_actions": ["REST"], "hard_session_allowed": false } },
+        { "date": "2026-05-07", "planned": { "family": "endurance", "duration_minutes": 75, "target_load": 50 }, "evidence": { "readiness": 54, "fatigue_risk": 47, "sleep_deficit_minutes": 30, "hrv_change_percent": null, "resting_hr_delta": 1, "acute_chronic_load_ratio": null, "fatigue": 3, "soreness": 2, "stress": 3, "illness_symptoms": false, "injury_pain": false, "available_minutes": 90 }, "expected": { "allowed_actions": ["KEEP", "REDUCE"], "hard_session_allowed": false } },
+        { "date": "2026-05-08", "planned": { "family": "recovery", "duration_minutes": 35, "target_load": 14 }, "evidence": { "readiness": 58, "fatigue_risk": 43, "sleep_deficit_minutes": 20, "hrv_change_percent": null, "resting_hr_delta": 0, "acute_chronic_load_ratio": null, "fatigue": 2, "soreness": 2, "stress": 2, "illness_symptoms": false, "injury_pain": false, "available_minutes": 45 }, "expected": { "allowed_actions": ["KEEP", "REDUCE"], "hard_session_allowed": false } }
+      ]
+    }
+  ]
+}

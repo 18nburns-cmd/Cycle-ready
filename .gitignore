@@ -4,6 +4,7 @@
 .packages
 build/
 android/.gradle/
+android/.kotlin/
 android/local.properties
 lib/**/*.g.dart
 config/cloud_defines.json

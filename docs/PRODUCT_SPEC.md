@@ -222,6 +222,9 @@ three consecutive days, resting heart rate has remained elevated for three
 consecutive days, illness/injury is present, or the previous workout's Recovery
 Cost Score exceeded 80. Without one of these exceptions, the third recovery
 session becomes a short, genuinely easy aerobic session rather than intensity.
+An explicitly planned recovery week is distinct from a week whose dose is
+temporarily reduced by a single current-day readiness, form or ramp-rate signal;
+only the former bypasses the two-session limit without persistent evidence.
 
 Outdoor planning uses the athlete's saved training location and preferred ride
 time. Forecast hazards such as near-freezing conditions, extreme heat, heavy
@@ -998,3 +1001,9 @@ The athlete should trust its decisions.
 The athlete should no longer need to decide what training to do.
 
 Every day the AI should know the athlete slightly better than the day before.
+
+Autonomous coaching releases must be evaluated against versioned, anonymized
+athlete timelines covering normal training, overload, illness, taper and
+missing health data. The same synthetic evidence is the safety reference for
+mobile and server implementations; no production athlete data may be used as a
+committed test fixture.

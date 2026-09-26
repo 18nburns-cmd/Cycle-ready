@@ -392,23 +392,23 @@ quietly influencing coaching.
 Goal: keep autonomous coaching changes safe as the system becomes more capable.
 
 - [x] Regenerate ignored Drift sources in clean Android and web release workflows.
-- [ ] Create anonymized golden athlete timelines for normal training, overload,
+- [x] Create anonymized golden athlete timelines for normal training, overload,
       illness, taper and missing-data scenarios.
-- [ ] Run the same golden timelines through Dart and server coaching engines.
-- [ ] Add invariant tests preventing unsafe intensity, excessive recovery chains
+- [x] Run the same golden timelines through Dart and server coaching engines.
+- [x] Add invariant tests preventing unsafe intensity, excessive recovery chains
       and post-event plan leakage.
-- [ ] Add end-to-end tests from imported ride through analysis, learning,
+- [x] Add end-to-end tests from imported ride through analysis, learning,
       next-day decision and provider delivery.
-- [ ] Add migration rollback guidance and forward-recovery tests for every new
+- [x] Add migration rollback guidance and forward-recovery tests for every new
       server schema change.
-- [ ] Add automated checks that secrets and private athlete data are absent from
+- [x] Add automated checks that secrets and private athlete data are absent from
       build artifacts and logs.
-- [ ] Add Android smoke tests for upgrade-with-data-preservation.
-- [ ] Add web smoke tests for authenticated relational reads and responsive
+- [x] Add Android smoke tests for upgrade-with-data-preservation.
+- [x] Add web smoke tests for authenticated relational reads and responsive
       navigation.
-- [ ] Establish a reproducible release checklist covering tests, analysis,
+- [x] Establish a reproducible release checklist covering tests, analysis,
       Android build, web build, migration status and phone installation.
-- [ ] Record the verified test count and production validation date after each
+- [x] Record the verified test count and production validation date after each
       release milestone.
 - [ ] Update `PRODUCT_SPEC.md`, `ARCHITECTURE.md`, `ROADMAP.md` and operational
       documentation when this backlog is completed.

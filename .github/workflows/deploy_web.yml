@@ -64,6 +64,11 @@ jobs:
             exit 1
           fi
 
+      - name: Verify release artifact privacy
+        env:
+          CYCLEREADY_PRIVATE_SCAN_VALUES: ${{ secrets.CYCLEREADY_PRIVATE_SCAN_VALUES }}
+        run: dart run tool/verify_release_privacy.dart build/web
+
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 

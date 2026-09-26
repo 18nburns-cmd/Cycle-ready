@@ -389,6 +389,28 @@ void main() {
     );
   });
 
+  test('an explicitly planned recovery week permits a longer recovery chain',
+      () {
+    final plan = generator.generate(
+      start: DateTime(2026, 9, 1),
+      goal: TrainingGoal.generalFitness,
+      daysPerWeek: 6,
+      longRideWeekday: DateTime.sunday,
+      ftp: 250,
+      currentWeeklyLoad: 300,
+      readiness: 80,
+      horizonDays: 7,
+      plannedRecoveryWeekIndexes: const {0},
+      recoveryDays: {
+        for (var offset = 0; offset < 7; offset++)
+          DateTime(2026, 9, 1 + offset),
+      },
+    );
+
+    expect(plan.take(3).every((item) => item.type == SessionType.recovery),
+        isTrue);
+  });
+
   test('healthy training does not force a fourth-week recovery block', () {
     final plan = generator.generate(
       start: DateTime(2026, 9, 1),

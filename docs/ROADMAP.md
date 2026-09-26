@@ -1,6 +1,6 @@
 # CycleReady delivery roadmap
 
-Updated: 25 August 2026
+Updated: 21 September 2026
 
 ## Delivered foundation
 
@@ -15,6 +15,10 @@ Updated: 25 August 2026
 - Nutrition, hydration, food label scanning and reusable foods
 - Strength and mobility programming with session history
 - Offline coaching, local notifications and athlete-response learning
+- Authoritative server daily coaching with Today/calendar convergence
+- Idempotent workout-delivery reconciliation and duplicate cleanup
+- Golden athlete timelines, safety invariants and release privacy gates
+- Authenticated responsive web portal and private signed Android releases
 
 ## Current coaching milestone
 

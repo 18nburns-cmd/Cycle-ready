@@ -1202,6 +1202,57 @@ prior production schemas. Tests seed realistic records, open the fixture through
 the current `AppDatabase` migration strategy and verify both current schema
 version and retained domain data.
 
+`test/fixtures/golden_athlete_timelines.json` is the anonymized, versioned
+cross-runtime coaching corpus. It contains chronological normal-training,
+overload, illness, taper and missing-data athlete days with planned dose,
+recovery evidence and bounded expected actions. Fixture validation prevents
+personal identifiers, incomplete evidence contracts and non-deterministic date
+ordering from entering coaching regression tests.
+The Dart replay executes every athlete-day through `AdaptiveTrainingPolicy` and
+checks its bounded action and intensity expectation. The Deno replay reads the
+identical file through the production server safety gate used by
+`process-adaptive-decision`, keeping mobile and backend safety interpretation
+on one version-controlled evidence set.
+Domain invariant tests independently prove that illness and severe recovery
+risk cannot retain high intensity, ordinary schedules cannot exceed two
+consecutive recovery sessions, and event-specific intensity cannot leak beyond
+the event. `AdaptivePlanGenerator` accepts explicit zero-based planned recovery
+week indexes; transient recovery-signal reductions remain subject to the
+recovery-chain limit unless the persistent evidence contract permits otherwise.
+The coaching learning-loop integration test starts with a normalized imported
+ride trace and exercises ride analysis, session outcome interpretation,
+athlete-response learning, the next-day adaptive policy, structured workout
+validation and the provider-neutral delivery boundary as one executable path.
+Server migrations are immutable and recover forward. Starting with migration
+`202609210001`, every schema migration has a companion note under
+`supabase/migrations/recovery` describing risk, logical rollback, forward
+recovery and verification. A repository test enforces this contract and checks
+repeatable/idempotent recovery properties; `docs/MIGRATION_RECOVERY.md` defines
+the production procedure and prohibits destructive linked-project resets.
+Release workflows run `tool/verify_release_privacy.dart` against the complete
+web bundle and the decompressed Android APK before upload. The scanner rejects
+private keys, server/provider secret signatures, local databases, ride-export
+files, logs and any operator-supplied private values without echoing matched
+content. `CYCLEREADY_PRIVATE_SCAN_VALUES` may contain newline-separated athlete
+identifiers or synthetic canaries that must never occur in an artifact.
+The manual Android upgrade-smoke workflow uses a disposable API 35 emulator.
+Its first test installation seeds synthetic profile, ride, recovery and plan
+records; its second replacement installation verifies the same records without
+uninstalling or clearing package storage. This smoke test must never run in
+seed mode on an athlete's real phone because its setup intentionally clears the
+test database.
+The web smoke test uses an authenticated synthetic account and a fake
+`RelationalCoachingRepository`, while retaining the production Riverpod read
+chain and `WebPortalData` mapping. It proves the relational read occurs once,
+renders ride and plan data, and preserves navigation state while switching
+between desktop rail and compact bottom navigation breakpoints.
+`tool/verify_release.ps1` is the local release gate. It regenerates sources,
+runs tests and analysis, builds and privacy-scans Android/web artifacts, checks
+linked migration status and can perform an `adb install -r` update on exactly
+one unlocked phone. `docs/RELEASE_CHECKLIST.md` adds the backup, signing,
+cross-surface consistency and post-release observation steps that cannot be
+fully automated.
+
 ---
 
 # Performance

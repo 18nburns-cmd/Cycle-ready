@@ -27,6 +27,12 @@ sources on its clean Linux runner, runs tests and analysis, builds
 the arm64 APK, signs it, creates a SHA-256 checksum and attaches both files to
 the GitHub release. It can also be started manually from GitHub Actions.
 
+Run the gates in `docs/RELEASE_CHECKLIST.md` before tagging. The workflow
+decompresses the APK and rejects embedded private keys, server secrets, local
+databases, ride exports and logs before publishing. The separate Android
+upgrade smoke workflow verifies replacement-install data preservation on a
+disposable emulator; never run its seed phase on an athlete's phone.
+
 ## Installing and updating
 
 On the phone, allow the browser to install unknown apps, download the APK from
@@ -37,3 +43,6 @@ GitHub contains a newer semantic version.
 
 Before sharing a release, compare its SHA-256 digest with the `.sha256` file.
 Only distribute the direct release link to intended CycleReady users.
+
+Record verified test counts, production validation dates and any incomplete
+gate in `docs/RELEASE_MILESTONES.md`.

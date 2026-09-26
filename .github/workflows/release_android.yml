@@ -40,7 +40,14 @@ jobs:
       - run: flutter test
       - run: flutter analyze
       - name: Build signed APK
-        run: flutter build apk --release --dart-define-from-file=config/cloud_defines.ci.json
+        run: flutter build apk --release --target-platform android-arm64 --dart-define-from-file=config/cloud_defines.ci.json
+      - name: Verify release artifact privacy
+        env:
+          CYCLEREADY_PRIVATE_SCAN_VALUES: ${{ secrets.CYCLEREADY_PRIVATE_SCAN_VALUES }}
+        run: |
+          mkdir -p build/privacy-apk
+          unzip -q build/app/outputs/flutter-apk/app-release.apk -d build/privacy-apk
+          dart run tool/verify_release_privacy.dart build/privacy-apk
       - name: Name and checksum artifact
         run: |
           cp build/app/outputs/flutter-apk/app-release.apk CycleReady-${GITHUB_REF_NAME}.apk

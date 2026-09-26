@@ -406,9 +406,12 @@ class StrategicTrainingPlanner {
       TrainingPhase.recoveryTransition => 7,
     };
     final eventBoundEnd = _date(input.today).add(Duration(days: duration - 1));
-    final end = eventBoundEnd.isAfter(_date(input.eventDate))
-        ? _date(input.eventDate)
-        : eventBoundEnd;
+    final eventHasPassed = _date(input.eventDate).isBefore(_date(input.today));
+    final end = phase == TrainingPhase.recoveryTransition && eventHasPassed
+        ? eventBoundEnd
+        : eventBoundEnd.isAfter(_date(input.eventDate))
+            ? _date(input.eventDate)
+            : eventBoundEnd;
     return StrategicTrainingBlock(
       phase: phase,
       primaryAdaptation: primary,

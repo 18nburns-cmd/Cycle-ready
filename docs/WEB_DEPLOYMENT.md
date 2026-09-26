@@ -37,3 +37,8 @@ flutter build web --release -t lib/main_web.dart --base-href /Cycle-ready/ --dar
 
 Never commit service-role keys, account passwords, Intervals.icu credentials,
 or private athlete exports.
+
+The deployment workflow runs `tool/verify_release_privacy.dart` against the
+compiled bundle before upload. Supply newline-separated synthetic canaries or
+private values through the optional `CYCLEREADY_PRIVATE_SCAN_VALUES` Actions
+secret. Record each verified deployment in `docs/RELEASE_MILESTONES.md`.
